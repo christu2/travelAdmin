@@ -1,0 +1,22 @@
+{
+  "name": "flight-api-proxy",
+  "version": "1.0.0",
+  "description": "FlightAware API proxy server for travel admin dashboard",
+  "main": "flight-proxy-server.js",
+  "scripts": {
+    "start": "node flight-proxy-server.js",
+    "dev": "nodemon flight-proxy-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.7.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["flight", "api", "proxy", "flightaware", "travel"],
+  "author": "Travel Admin",
+  "license": "MIT"
+}
