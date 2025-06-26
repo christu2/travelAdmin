@@ -217,29 +217,37 @@ const parseTripadvisorData = (data, checkIn, checkOut, guests) => {
     }
 
     return data.data
-        .filter(item => item.result_type === 'hotel')
         .slice(0, 10) // Limit to top 10 results
         .map(hotel => {
-            const hotelChain = detectHotelChain(hotel.result_object.name);
+            const hotelChain = detectHotelChain(hotel.name);
             const directBookingUrl = hotelChain ? 
-                generateDirectBookingUrl(hotelChain, hotel.result_object.name, checkIn, checkOut, guests) : null;
+                generateDirectBookingUrl(hotelChain, hotel.name, checkIn, checkOut, guests) : null;
+
+            // Format address from address_obj
+            let address = 'Address not available';
+            if (hotel.address_obj) {
+                const addressParts = [
+                    hotel.address_obj.street1,
+                    hotel.address_obj.city,
+                    hotel.address_obj.country
+                ].filter(part => part && part.trim());
+                address = addressParts.join(', ');
+            }
 
             return {
-                id: hotel.result_object.location_id,
-                name: hotel.result_object.name,
-                address: hotel.result_object.address_obj ? 
-                    `${hotel.result_object.address_obj.street1 || ''}, ${hotel.result_object.address_obj.city || ''}, ${hotel.result_object.address_obj.country || ''}`.replace(/^, |, $/, '') : 
-                    'Address not available',
-                rating: parseFloat(hotel.result_object.rating) || 0,
-                numReviews: parseInt(hotel.result_object.num_reviews) || 0,
-                priceLevel: hotel.result_object.price_level || 'N/A',
+                id: hotel.location_id,
+                name: hotel.name,
+                address: address,
+                rating: parseFloat(hotel.rating) || 4.0, // Default rating if not provided
+                numReviews: parseInt(hotel.num_reviews) || 0,
+                priceLevel: hotel.price_level || '$$$', // Default price level
                 hotelChain: hotelChain,
                 directBookingUrl: directBookingUrl,
                 bookingInstructions: directBookingUrl ? 
                     `Book direct with ${hotelChain.charAt(0).toUpperCase() + hotelChain.slice(1)} for best rates and loyalty benefits` :
                     'Compare rates across booking platforms',
-                phone: hotel.result_object.phone || null,
-                website: hotel.result_object.website || null,
+                phone: hotel.phone || null,
+                website: hotel.website || null,
                 amenities: [], // TripAdvisor Content API may not include amenities in search results
                 source: 'tripadvisor'
             };
