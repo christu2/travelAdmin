@@ -352,6 +352,34 @@ app.listen(PORT, () => {
     // Log API key status
     console.log(`🔑 TripAdvisor API Key: ${TRIPADVISOR_API_KEY ? 'Configured' : 'Not configured'}`);
     console.log(`🔑 Foursquare API Key: ${FOURSQUARE_API_KEY ? 'Configured' : 'Not configured'}`);
+    
+    // Test TripAdvisor API on startup if configured
+    if (TRIPADVISOR_API_KEY) {
+        console.log(`🧪 Testing TripAdvisor API connection...`);
+        
+        const testUrl = `${TRIPADVISOR_BASE_URL}/location/search?searchQuery=NYC&category=hotels&language=en&key=${TRIPADVISOR_API_KEY}`;
+        
+        fetch(testUrl, {
+            headers: { 
+                'Accept': 'application/json',
+                'User-Agent': 'TravelAdmin/1.0'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                console.log(`✅ TripAdvisor API: Working correctly`);
+            } else if (response.status === 403 || response.status === 401) {
+                console.log(`❌ TripAdvisor API: Authentication failed (${response.status})`);
+                console.log(`   🔧 Check IP restrictions at: https://developer-tripadvisor.com/`);
+                console.log(`   📍 Current public IP should be allowed in restrictions`);
+            } else {
+                console.log(`⚠️  TripAdvisor API: Unexpected status ${response.status}`);
+            }
+        })
+        .catch(error => {
+            console.log(`⚠️  TripAdvisor API: Connection test failed - ${error.message}`);
+        });
+    }
 });
 
 module.exports = app;

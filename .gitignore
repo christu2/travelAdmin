@@ -46,3 +46,6 @@ config/secrets.js
 
 # Generated dashboard with injected API keys
 admin-dashboard.html
+
+# IP change detection log
+.last_known_ip

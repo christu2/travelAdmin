@@ -11,6 +11,44 @@ else
     exit 1
 fi
 
+# IP Change Detection and Monitoring
+echo "🌐 Checking public IP address..."
+
+# Get current public IP
+CURRENT_IP=$(curl -s --connect-timeout 5 https://api.ipify.org 2>/dev/null || curl -s --connect-timeout 5 https://checkip.amazonaws.com 2>/dev/null | tr -d '\n' || echo "unknown")
+
+if [ "$CURRENT_IP" = "unknown" ]; then
+    echo "⚠️  Warning: Could not detect public IP address (check internet connection)"
+    echo "   TripAdvisor API may fail if IP restrictions are configured"
+else
+    echo "📍 Current public IP: $CURRENT_IP"
+    
+    # Check if IP has changed since last run
+    IP_LOG_FILE=".last_known_ip"
+    
+    if [ -f "$IP_LOG_FILE" ]; then
+        LAST_IP=$(cat "$IP_LOG_FILE")
+        if [ "$CURRENT_IP" != "$LAST_IP" ]; then
+            echo "🚨 IP ADDRESS CHANGED!"
+            echo "   Previous IP: $LAST_IP"
+            echo "   Current IP:  $CURRENT_IP"
+            echo ""
+            echo "⚠️  ACTION REQUIRED: Update TripAdvisor API key IP restrictions"
+            echo "   1. Go to: https://developer-tripadvisor.com/"
+            echo "   2. Update IP restriction to: $CURRENT_IP/32"
+            echo "   3. Or use IP range: ${CURRENT_IP%.*}.0/24 (recommended)"
+            echo ""
+        else
+            echo "✅ IP address unchanged since last run"
+        fi
+    else
+        echo "📝 First run - saving IP address for future comparison"
+    fi
+    
+    # Save current IP for next comparison
+    echo "$CURRENT_IP" > "$IP_LOG_FILE"
+fi
+
 # Generate admin dashboard with API keys
 echo "🔧 Generating admin dashboard with API keys..."
 if [ -f admin-dashboard.template.html ]; then
