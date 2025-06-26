@@ -223,7 +223,7 @@
         const FLIGHTAWARE_CONFIG = {
             // Local proxy server to handle CORS issues
             proxyUrl: 'http://localhost:3001/api',
-            directApiKey: process.env.FLIGHTAWARE_API_KEY || 'YOUR_FLIGHTAWARE_API_KEY_HERE',
+            directApiKey: '{{FLIGHTAWARE_API_KEY}}', // FlightAware API key - injected by start-services.sh
             freeCredit: 5 // $5 USD per month
         };
 
@@ -956,7 +956,7 @@
         // Firebase configuration - using environment variables
         // SECURITY: Never hardcode API keys in source code
         const firebaseConfig = {
-            apiKey: process.env.FIREBASE_API_KEY || "YOUR_NEW_API_KEY_HERE",
+            apiKey: "{{FIREBASE_API_KEY}}", // Firebase API key - injected by start-services.sh
             authDomain: "travel-consulting-app-1.firebaseapp.com",
             projectId: "travel-consulting-app-1",
             storageBucket: "travel-consulting-app-1.firebasestorage.app",

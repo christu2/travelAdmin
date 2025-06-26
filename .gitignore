@@ -43,3 +43,6 @@ config/secrets.js
 *-setup.md.backup
 *-credentials.txt
 *-api-keys.txt
+
+# Generated dashboard with injected API keys
+admin-dashboard.html
