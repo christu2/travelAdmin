@@ -36,3 +36,10 @@ config/secrets.js
 **/secrets.json
 **/*secret*
 **/*key*
+**/GoogleService-Info*.plist
+*.env*
+!.env.example
+# API key documentation with real values
+*-setup.md.backup
+*-credentials.txt
+*-api-keys.txt

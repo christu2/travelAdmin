@@ -227,6 +227,12 @@
             freeCredit: 5 // $5 USD per month
         };
 
+        // Hotel Content API Configuration
+        const HOTEL_CONFIG = {
+            proxyUrl: 'http://localhost:3002/api', // Hotel proxy server
+            supportedSources: ['tripadvisor', 'foursquare'], // Fallback to mock if needed
+        };
+
         // Clean flight number by removing spaces and converting to uppercase
         function cleanFlightNumber(flightNumber) {
             return flightNumber.replace(/\s+/g, '').toUpperCase();
@@ -633,16 +639,111 @@
             }
         }
 
-        // Hotel search functionality (for future implementation)
-        async function searchHotels(location, checkIn, checkOut) {
+        // Hotel search function - integrates with hotel proxy server
+        async function searchHotels(location, checkIn, checkOut, guests = 2) {
             try {
-                // TODO: Implement hotel search with Booking.com or Amadeus Hotel API
-                console.log(`Searching hotels in ${location} from ${checkIn} to ${checkOut}`);
+                console.log(`🏨 Searching hotels in ${location} from ${checkIn} to ${checkOut} for ${guests} guests`);
+                
+                // Check if hotel proxy server is running
+                try {
+                    const healthCheck = await fetch(`${HOTEL_CONFIG.proxyUrl}/health`);
+                    
+                    if (healthCheck.ok) {
+                        console.log('✅ Hotel proxy server is running');
+                        
+                        const searchUrl = `${HOTEL_CONFIG.proxyUrl}/hotels/search?location=${encodeURIComponent(location)}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`;
+                        const response = await fetch(searchUrl);
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log('✅ Hotel search successful:', data);
+                            
+                            if (data.success && data.hotels && data.hotels.length > 0) {
+                                return data.hotels;
+                            } else {
+                                console.log('ℹ️ No hotels found in search results');
+                                return [];
+                            }
+                        } else {
+                            const errorData = await response.text();
+                            console.log('❌ Hotel API error:', response.status, errorData);
+                        }
+                    } else {
+                        console.log('❌ Hotel proxy server health check failed');
+                    }
+                } catch (proxyError) {
+                    console.log('❌ Hotel proxy server not available:', proxyError.message);
+                }
+
+                // Fallback to empty array if API fails
+                console.log('ℹ️ Hotel search failed - returning empty results');
                 return [];
+                
             } catch (error) {
-                console.error('Hotel search error:', error);
+                console.error('❌ Error in searchHotels:', error);
                 return [];
             }
+        }
+
+        // Convert hotel search result to accommodation format
+        function convertHotelToAccommodation(hotel, checkIn, checkOut) {
+            return {
+                id: `acc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                name: hotel.name,
+                type: hotel.hotelChain ? 'hotel' : 'boutique',
+                checkIn: checkIn,
+                checkOut: checkOut,
+                nights: calculateNights(checkIn, checkOut),
+                location: {
+                    name: hotel.name,
+                    address: hotel.address,
+                    coordinates: null,
+                    nearbyLandmarks: ''
+                },
+                roomType: 'Standard Room',
+                amenities: hotel.amenities || [],
+                cost: {
+                    paymentType: 'cash',
+                    cashAmount: estimateHotelCost(hotel.priceLevel, calculateNights(checkIn, checkOut)),
+                    pointsAmount: null,
+                    pointsProgram: null,
+                    totalCashValue: estimateHotelCost(hotel.priceLevel, calculateNights(checkIn, checkOut)),
+                    notes: `Based on ${hotel.priceLevel} price level`
+                },
+                bookingUrl: hotel.directBookingUrl || hotel.website || '',
+                bookingInstructions: hotel.bookingInstructions || 'Check rates and book directly',
+                cancellationPolicy: 'Please check with hotel for cancellation policy',
+                contactInfo: {
+                    phone: hotel.phone || '',
+                    email: '',
+                    website: hotel.website || ''
+                }
+            };
+        }
+
+        // Helper function to calculate nights between dates
+        function calculateNights(checkIn, checkOut) {
+            if (!checkIn || !checkOut) return 1;
+            
+            const startDate = new Date(checkIn);
+            const endDate = new Date(checkOut);
+            const timeDiff = endDate - startDate;
+            const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+            
+            return Math.max(daysDiff, 1);
+        }
+
+        // Helper function to estimate hotel cost from price level
+        function estimateHotelCost(priceLevel, nights) {
+            const baseCost = {
+                '$': 80,
+                '$$': 150,
+                '$$$': 250,
+                '$$$$': 400
+            };
+            
+            const perNightCost = baseCost[priceLevel] || 180;
+            return perNightCost * nights;
         }
 
         // Date Utilities for Timezone-Agnostic Handling
@@ -2161,6 +2262,16 @@
         }
 
         function AccommodationsTab({ accommodations, setAccommodations }) {
+            const [showHotelSearch, setShowHotelSearch] = useState(false);
+            const [hotelSearchResults, setHotelSearchResults] = useState([]);
+            const [isSearchingHotels, setIsSearchingHotels] = useState(false);
+            const [hotelSearchParams, setHotelSearchParams] = useState({
+                location: '',
+                checkIn: '',
+                checkOut: '',
+                guests: 2
+            });
+
             const addAccommodation = () => {
                 const newAccommodation = {
                     id: `acc_${Date.now()}`,
@@ -2181,14 +2292,238 @@
                 setAccommodations([...accommodations, newAccommodation]);
             };
 
+            const performHotelSearch = async () => {
+                if (!hotelSearchParams.location || !hotelSearchParams.checkIn || !hotelSearchParams.checkOut) {
+                    alert('Please fill in location, check-in, and check-out dates');
+                    return;
+                }
+
+                setIsSearchingHotels(true);
+                try {
+                    const results = await searchHotels(
+                        hotelSearchParams.location,
+                        hotelSearchParams.checkIn,
+                        hotelSearchParams.checkOut,
+                        hotelSearchParams.guests
+                    );
+                    setHotelSearchResults(results);
+                } catch (error) {
+                    console.error('Hotel search failed:', error);
+                    alert('Hotel search failed. Please try again.');
+                } finally {
+                    setIsSearchingHotels(false);
+                }
+            };
+
+            const selectHotel = (hotel) => {
+                const newAccommodation = convertHotelToAccommodation(
+                    hotel, 
+                    hotelSearchParams.checkIn, 
+                    hotelSearchParams.checkOut
+                );
+                setAccommodations([...accommodations, newAccommodation]);
+                setShowHotelSearch(false);
+                setHotelSearchResults([]);
+            };
+
             return (
                 <div>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
                         <h3>Accommodations</h3>
-                        <button className="btn btn-primary" onClick={addAccommodation}>
-                            + Add Accommodation
-                        </button>
+                        <div style={{display: 'flex', gap: '10px'}}>
+                            <button className="btn btn-secondary" onClick={() => setShowHotelSearch(true)}>
+                                🏨 Search Hotels
+                            </button>
+                            <button className="btn btn-primary" onClick={addAccommodation}>
+                                + Add Accommodation
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Hotel Search Modal */}
+                    {showHotelSearch && (
+                        <div style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.5)',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            zIndex: 1000
+                        }}>
+                            <div style={{
+                                backgroundColor: 'white',
+                                borderRadius: '12px',
+                                padding: '30px',
+                                width: '90%',
+                                maxWidth: '800px',
+                                maxHeight: '80vh',
+                                overflow: 'auto',
+                                boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+                            }}>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+                                    <h2 style={{margin: 0, color: '#2563eb'}}>🏨 Search Hotels</h2>
+                                    <button
+                                        onClick={() => setShowHotelSearch(false)}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: '24px',
+                                            cursor: 'pointer',
+                                            color: '#6b7280'
+                                        }}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+
+                                {/* Search Form */}
+                                <div className="form-grid" style={{marginBottom: '20px'}}>
+                                    <div className="form-group">
+                                        <label className="form-label">Location (City or Address)</label>
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            placeholder="New York, Paris, Tokyo..."
+                                            value={hotelSearchParams.location}
+                                            onChange={(e) => setHotelSearchParams({...hotelSearchParams, location: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Check-in Date</label>
+                                        <input
+                                            type="date"
+                                            className="form-input"
+                                            value={hotelSearchParams.checkIn}
+                                            onChange={(e) => setHotelSearchParams({...hotelSearchParams, checkIn: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Check-out Date</label>
+                                        <input
+                                            type="date"
+                                            className="form-input"
+                                            value={hotelSearchParams.checkOut}
+                                            onChange={(e) => setHotelSearchParams({...hotelSearchParams, checkOut: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Guests</label>
+                                        <select
+                                            className="form-select"
+                                            value={hotelSearchParams.guests}
+                                            onChange={(e) => setHotelSearchParams({...hotelSearchParams, guests: parseInt(e.target.value)})}
+                                        >
+                                            <option value={1}>1 Guest</option>
+                                            <option value={2}>2 Guests</option>
+                                            <option value={3}>3 Guests</option>
+                                            <option value={4}>4 Guests</option>
+                                            <option value={5}>5+ Guests</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div style={{textAlign: 'center', marginBottom: '20px'}}>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={performHotelSearch}
+                                        disabled={isSearchingHotels}
+                                        style={{fontSize: '16px', padding: '12px 24px'}}
+                                    >
+                                        {isSearchingHotels ? '🔄 Searching...' : '🔍 Search Hotels'}
+                                    </button>
+                                </div>
+
+                                {/* Search Results */}
+                                {hotelSearchResults.length > 0 && (
+                                    <div>
+                                        <h3 style={{marginBottom: '15px', color: '#374151'}}>
+                                            Found {hotelSearchResults.length} hotels
+                                        </h3>
+                                        <div style={{maxHeight: '400px', overflow: 'auto'}}>
+                                            {hotelSearchResults.map((hotel, index) => (
+                                                <div
+                                                    key={hotel.id}
+                                                    style={{
+                                                        border: '1px solid #e5e7eb',
+                                                        borderRadius: '8px',
+                                                        padding: '15px',
+                                                        marginBottom: '10px',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        backgroundColor: '#f9fafb'
+                                                    }}
+                                                    onMouseOver={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+                                                    onMouseOut={(e) => e.target.style.backgroundColor = '#f9fafb'}
+                                                    onClick={() => selectHotel(hotel)}
+                                                >
+                                                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                                                        <div style={{flex: 1}}>
+                                                            <h4 style={{margin: '0 0 8px 0', color: '#1f2937', fontSize: '18px'}}>
+                                                                {hotel.name}
+                                                                {hotel.hotelChain && (
+                                                                    <span style={{
+                                                                        backgroundColor: '#2563eb',
+                                                                        color: 'white',
+                                                                        padding: '2px 6px',
+                                                                        borderRadius: '4px',
+                                                                        fontSize: '12px',
+                                                                        marginLeft: '10px'
+                                                                    }}>
+                                                                        {hotel.hotelChain.toUpperCase()}
+                                                                    </span>
+                                                                )}
+                                                            </h4>
+                                                            <p style={{margin: '0 0 8px 0', color: '#6b7280', fontSize: '14px'}}>
+                                                                📍 {hotel.address}
+                                                            </p>
+                                                            <div style={{display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '8px'}}>
+                                                                <span style={{color: '#f59e0b', fontWeight: 'bold'}}>
+                                                                    ⭐ {hotel.rating.toFixed(1)} ({hotel.numReviews} reviews)
+                                                                </span>
+                                                                <span style={{color: '#059669', fontWeight: 'bold'}}>
+                                                                    {hotel.priceLevel}
+                                                                </span>
+                                                            </div>
+                                                            {hotel.amenities && hotel.amenities.length > 0 && (
+                                                                <p style={{margin: '0 0 8px 0', color: '#6b7280', fontSize: '13px'}}>
+                                                                    🎯 {hotel.amenities.slice(0, 3).join(', ')}
+                                                                    {hotel.amenities.length > 3 && ` +${hotel.amenities.length - 3} more`}
+                                                                </p>
+                                                            )}
+                                                            <p style={{margin: 0, color: '#059669', fontSize: '13px', fontStyle: 'italic'}}>
+                                                                💡 {hotel.bookingInstructions}
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            className="btn btn-primary"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                selectHotel(hotel);
+                                                            }}
+                                                            style={{marginLeft: '15px', padding: '8px 16px'}}
+                                                        >
+                                                            Select Hotel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {hotelSearchResults.length === 0 && !isSearchingHotels && hotelSearchParams.location && (
+                                    <div style={{textAlign: 'center', padding: '20px', color: '#6b7280'}}>
+                                        <p>No hotels found for your search criteria.</p>
+                                        <p style={{fontSize: '14px'}}>Try adjusting your location or dates.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {accommodations.map(accommodation => (
                         <div key={accommodation.id} style={{background: '#f9fafb', padding: '16px', borderRadius: '8px', marginBottom: '16px'}}>

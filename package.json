@@ -5,7 +5,9 @@
   "main": "flight-proxy-server.js",
   "scripts": {
     "start": "node flight-proxy-server.js",
-    "dev": "nodemon flight-proxy-server.js"
+    "start:hotel": "node hotel-proxy-server.js",
+    "dev": "nodemon flight-proxy-server.js",
+    "dev:hotel": "nodemon hotel-proxy-server.js"
   },
   "dependencies": {
     "express": "^4.18.2",

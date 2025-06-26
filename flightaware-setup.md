@@ -20,7 +20,7 @@
 Your FlightAware API key has been added to the admin dashboard:
 
 ```javascript
-apiKey: 'YOUR_FLIGHTAWARE_API_KEY_HERE', // Your active API key
+apiKey: 'YOUR_FLIGHTAWARE_API_KEY_HERE', // Replace with your actual API key
 ```
 
 **Status**: Ready for real flight data with $5 monthly credit!
