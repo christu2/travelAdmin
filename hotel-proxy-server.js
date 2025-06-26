@@ -111,6 +111,79 @@ app.get('/api/test/tripadvisor', async (req, res) => {
     }
 });
 
+// Hotel details endpoint using TripAdvisor Location Details API
+app.get('/api/hotels/details/:locationId', async (req, res) => {
+    try {
+        const { locationId } = req.params;
+        const { language = 'en' } = req.query;
+
+        if (!locationId) {
+            return res.status(400).json({ 
+                error: 'Location ID parameter is required',
+                source: 'hotel-proxy-server'
+            });
+        }
+
+        console.log(`[Hotel Details] Getting details for location ID: ${locationId}`);
+
+        let hotelDetails = null;
+
+        // Try TripAdvisor Location Details API
+        if (TRIPADVISOR_API_KEY) {
+            try {
+                const detailsUrl = `${TRIPADVISOR_BASE_URL}/location/${locationId}/details?language=${language}&key=${TRIPADVISOR_API_KEY}`;
+                console.log(`[TripAdvisor] Getting hotel details: ${detailsUrl.replace(TRIPADVISOR_API_KEY, 'HIDDEN_API_KEY')}`);
+
+                const response = await fetch(detailsUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'TravelAdmin/1.0'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    hotelDetails = parseTripadvisorDetails(data);
+                    console.log(`[TripAdvisor] Hotel details retrieved successfully`);
+                } else {
+                    console.log(`[TripAdvisor] API error: ${response.status} - ${response.statusText}`);
+                    
+                    try {
+                        const errorBody = await response.text();
+                        console.log(`[TripAdvisor] Error response: ${errorBody}`);
+                    } catch (e) {
+                        console.log(`[TripAdvisor] Could not read error response`);
+                    }
+                }
+            } catch (error) {
+                console.log(`[TripAdvisor] Request failed: ${error.message}`);
+            }
+        }
+
+        // Return results or error
+        if (hotelDetails) {
+            res.json({
+                success: true,
+                hotel: hotelDetails,
+                source: 'tripadvisor'
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                error: 'Hotel details not found',
+                locationId: locationId
+            });
+        }
+
+    } catch (error) {
+        console.error('[Hotel Details] Error:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+        });
+    }
+});
+
 // Hotel search endpoint using TripAdvisor Content API
 app.get('/api/hotels/search', async (req, res) => {
     try {
@@ -254,6 +327,88 @@ const parseTripadvisorData = (data, checkIn, checkOut, guests) => {
         });
 };
 
+// Parse TripAdvisor Location Details API response
+const parseTripadvisorDetails = (data) => {
+    if (!data) {
+        return null;
+    }
+
+    // Build TripAdvisor URL
+    const tripadvisorUrl = data.web_url || `https://www.tripadvisor.com/Hotel_Review-d${data.location_id}.html`;
+
+    // Parse photos (limit to first 10 for performance)
+    const photos = [];
+    if (data.photos && Array.isArray(data.photos)) {
+        data.photos.slice(0, 10).forEach(photo => {
+            if (photo.images && photo.images.large) {
+                photos.push({
+                    url: photo.images.large.url,
+                    caption: photo.caption || '',
+                    width: photo.images.large.width,
+                    height: photo.images.large.height
+                });
+            } else if (photo.images && photo.images.medium) {
+                photos.push({
+                    url: photo.images.medium.url,
+                    caption: photo.caption || '',
+                    width: photo.images.medium.width,
+                    height: photo.images.medium.height
+                });
+            }
+        });
+    }
+
+    // Parse amenities
+    const amenities = [];
+    if (data.amenities && Array.isArray(data.amenities)) {
+        data.amenities.forEach(amenity => {
+            if (amenity.name) {
+                amenities.push(amenity.name);
+            }
+        });
+    }
+
+    // Parse address
+    let address = 'Address not available';
+    if (data.address_obj) {
+        const addressParts = [
+            data.address_obj.street1,
+            data.address_obj.city,
+            data.address_obj.country
+        ].filter(part => part && part.trim());
+        address = addressParts.join(', ');
+    }
+
+    // Detect hotel chain for booking links
+    const hotelChain = detectHotelChain(data.name);
+
+    return {
+        id: data.location_id,
+        name: data.name,
+        description: data.description || '',
+        address: address,
+        phone: data.phone || null,
+        website: data.website || null,
+        email: data.email || null,
+        tripadvisorUrl: tripadvisorUrl,
+        rating: parseFloat(data.rating) || 0,
+        numReviews: parseInt(data.num_reviews) || 0,
+        rankingString: data.ranking_string || '',
+        priceLevel: data.price_level || null,
+        hotelClass: data.hotel_class || null,
+        awards: data.awards || [],
+        amenities: amenities,
+        photos: photos,
+        hotelChain: hotelChain,
+        latitude: data.latitude ? parseFloat(data.latitude) : null,
+        longitude: data.longitude ? parseFloat(data.longitude) : null,
+        timezone: data.timezone || null,
+        checkInTime: data.check_in_time || null,
+        checkOutTime: data.check_out_time || null,
+        source: 'tripadvisor'
+    };
+};
+
 // Parse Foursquare API response
 const parseFoursquareData = (data, checkIn, checkOut, guests) => {
     if (!data.results || !Array.isArray(data.results)) {
@@ -356,6 +511,7 @@ app.listen(PORT, () => {
     console.log(`🏨 Hotel Proxy Server running on http://localhost:${PORT}`);
     console.log(`📍 Health check: http://localhost:${PORT}/api/health`);
     console.log(`🔍 Hotel search: http://localhost:${PORT}/api/hotels/search?location=NYC&checkIn=2024-07-01&checkOut=2024-07-03&guests=2`);
+    console.log(`🏨 Hotel details: http://localhost:${PORT}/api/hotels/details/{locationId}`);
     
     // Log API key status
     console.log(`🔑 TripAdvisor API Key: ${TRIPADVISOR_API_KEY ? 'Configured' : 'Not configured'}`);
