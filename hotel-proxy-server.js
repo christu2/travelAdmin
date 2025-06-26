@@ -82,11 +82,14 @@ app.get('/api/test/tripadvisor', async (req, res) => {
     }
 
     try {
-        // Test with a simple location search
+        // Test with a simple location search using official API format
         const testUrl = `${TRIPADVISOR_BASE_URL}/location/search?searchQuery=NYC&category=hotels&language=en&key=${TRIPADVISOR_API_KEY}`;
         
         const response = await fetch(testUrl, {
-            headers: { 'Accept': 'application/json' }
+            headers: { 
+                'Accept': 'application/json',
+                'User-Agent': 'TravelAdmin/1.0'
+            }
         });
 
         const responseText = await response.text();
@@ -127,50 +130,26 @@ app.get('/api/hotels/search', async (req, res) => {
         // Try TripAdvisor API first
         if (TRIPADVISOR_API_KEY) {
             try {
-                // Try multiple API formats as TripAdvisor has different endpoint patterns
-                const searchMethods = [
-                    // Method 1: API key in query parameter
-                    {
-                        url: `${TRIPADVISOR_BASE_URL}/location/search?searchQuery=${encodeURIComponent(location)}&category=hotels&language=en&key=${TRIPADVISOR_API_KEY}`,
-                        headers: { 'Accept': 'application/json' },
-                        name: 'query parameter'
-                    },
-                    // Method 2: API key in header (original method)
-                    {
-                        url: `${TRIPADVISOR_BASE_URL}/location/search?searchQuery=${encodeURIComponent(location)}&category=hotels&language=en`,
-                        headers: {
-                            'Accept': 'application/json',
-                            'x-tripadvisor-api-key': TRIPADVISOR_API_KEY
-                        },
-                        name: 'header method'
+                // Use official TripAdvisor Content API format from documentation
+                // Documentation: https://tripadvisor-content-api.readme.io/reference/searchforlocations
+                const apiUrl = `${TRIPADVISOR_BASE_URL}/location/search?searchQuery=${encodeURIComponent(location)}&category=hotels&language=en&key=${TRIPADVISOR_API_KEY}`;
+                
+                console.log(`[TripAdvisor] Searching for hotels in: ${location}`);
+                console.log(`[TripAdvisor] API call: ${apiUrl.replace(TRIPADVISOR_API_KEY, 'HIDDEN_API_KEY')}`);
+
+                const response = await fetch(apiUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'TravelAdmin/1.0'
                     }
-                ];
+                });
 
-                let response = null;
-                let usedMethod = '';
-
-                for (const method of searchMethods) {
-                    try {
-                        console.log(`[TripAdvisor] Trying ${method.name}...`);
-                        response = await fetch(method.url, { headers: method.headers });
-                        
-                        if (response.ok) {
-                            usedMethod = method.name;
-                            break;
-                        } else {
-                            console.log(`[TripAdvisor] ${method.name} failed: ${response.status} - ${response.statusText}`);
-                        }
-                    } catch (methodError) {
-                        console.log(`[TripAdvisor] ${method.name} error: ${methodError.message}`);
-                    }
-                }
-
-                if (response && response.ok) {
+                if (response.ok) {
                     const data = await response.json();
                     hotelData = parseTripadvisorData(data, checkIn, checkOut, guests);
-                    console.log(`[TripAdvisor] Success with ${usedMethod}! Found ${hotelData.length} hotels`);
-                } else if (response) {
-                    console.log(`[TripAdvisor] All methods failed. Last status: ${response.status}`);
+                    console.log(`[TripAdvisor] Success! Found ${hotelData.length} hotels`);
+                } else {
+                    console.log(`[TripAdvisor] API error: ${response.status} - ${response.statusText}`);
                     
                     // Log response body for debugging
                     try {
@@ -179,8 +158,6 @@ app.get('/api/hotels/search', async (req, res) => {
                     } catch (e) {
                         console.log(`[TripAdvisor] Could not read error response`);
                     }
-                } else {
-                    console.log(`[TripAdvisor] All authentication methods failed`);
                 }
             } catch (error) {
                 console.log(`[TripAdvisor] Request failed: ${error.message}`);
