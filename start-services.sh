@@ -49,29 +49,24 @@ else
     echo "$CURRENT_IP" > "$IP_LOG_FILE"
 fi
 
-# Generate admin dashboard with API keys
-echo "🔧 Generating admin dashboard with API keys..."
-if [ -f admin-dashboard.template.html ]; then
-    sed -e "s/{{FIREBASE_API_KEY}}/$FIREBASE_API_KEY/g" \
-        -e "s/{{FLIGHTAWARE_API_KEY}}/$FLIGHTAWARE_API_KEY/g" \
-        admin-dashboard.template.html > admin-dashboard.html
-    echo "✅ Admin dashboard generated with API keys injected"
-else
-    echo "⚠️  Warning: admin-dashboard.template.html not found"
-fi
-
-# Start both FlightAware proxy server and Python HTTP server
-echo "🚀 Starting FlightAware proxy server and Python HTTP server..."
-
-# Start FlightAware proxy server in background
-echo "Starting FlightAware proxy server on port 3001..."
-node flight-proxy-server.js &
-FLIGHT_PROXY_PID=$!
+# Generate destination-based admin dashboard with API keys
+echo "🔧 Generating destination-based admin dashboard with API keys..."
+# Use the new template-based dashboard for GitHub security
+sed -e "s/{{FIREBASE_API_KEY}}/$FIREBASE_API_KEY/g" \
+    destination-based-admin.template.html > admin-dashboard.html
+echo "✅ Destination-based admin dashboard generated with API keys injected (GitHub-safe)"
+echo "🌍 Dashboard supports multi-city itineraries with hotel options and transport segments"
+echo "🔍 SerpAPI integration for real-time flight search enabled"
 
 # Start Hotel proxy server in background
 echo "Starting Hotel proxy server on port 3002..."
 node hotel-proxy-server.js &
 HOTEL_PROXY_PID=$!
+
+# Start SerpAPI proxy server in background
+echo "Starting SerpAPI proxy server on port 3003..."
+node serpapi-proxy-server.js &
+SERPAPI_PROXY_PID=$!
 
 # Wait a moment for proxy servers to start
 sleep 3
@@ -83,15 +78,22 @@ HTTP_PID=$!
 
 echo ""
 echo "✅ All services are running:"
-echo "   📡 FlightAware proxy: http://localhost:3001"
 echo "   🏨 Hotel proxy: http://localhost:3002"
+echo "   🔍 SerpAPI proxy: http://localhost:3003"
 echo "   🌐 HTTP server: http://localhost:8000"
-echo "   📊 Admin dashboard: http://localhost:8000/admin-dashboard.html"
+echo "   🌍 Destination-based Admin Dashboard: http://localhost:8000/admin-dashboard.html"
 echo ""
-echo "To stop all services, press Ctrl+C or run: kill $FLIGHT_PROXY_PID $HOTEL_PROXY_PID $HTTP_PID"
+echo "🎯 New Dashboard Features:"
+echo "   • Multi-city trip planning (Madrid → Rome → Barcelona)"
+echo "   • Multiple hotel options per destination"
+echo "   • Real-time flight search via SerpAPI Google Flights"
+echo "   • Inter-city transport segments with live pricing"
+echo "   • Comprehensive cost breakdowns"
+echo ""
+echo "To stop all services, press Ctrl+C or run: kill $FLIGHT_PROXY_PID $HOTEL_PROXY_PID $SERPAPI_PROXY_PID $HTTP_PID"
 
 # Keep script running and handle Ctrl+C
-trap "echo ''; echo '🛑 Stopping services...'; kill $FLIGHT_PROXY_PID $HOTEL_PROXY_PID $HTTP_PID 2>/dev/null; exit" INT
+trap "echo ''; echo '🛑 Stopping services...'; kill $FLIGHT_PROXY_PID $HOTEL_PROXY_PID $SERPAPI_PROXY_PID $HTTP_PID 2>/dev/null; exit" INT
 
 # Wait for background processes
 wait
