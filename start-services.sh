@@ -51,11 +51,19 @@ fi
 
 # Generate destination-based admin dashboard with API keys
 echo "🔧 Generating destination-based admin dashboard with API keys..."
-# Use the new template-based dashboard for GitHub security
-sed -e "s/{{FIREBASE_API_KEY}}/$FIREBASE_API_KEY/g" \
-    destination-based-admin.template.html > admin-dashboard.html
-echo "✅ Destination-based admin dashboard generated with API keys injected (GitHub-safe)"
-echo "🌍 Dashboard supports multi-city itineraries with hotel options and transport segments"
+
+# Generate minimal modular dashboard (new main dashboard)
+if command -v sed >/dev/null 2>&1; then
+    sed -e "s/{{FIREBASE_API_KEY}}/$FIREBASE_API_KEY/g" \
+        admin-dashboard-minimal.template.html > admin-dashboard.html
+else
+    echo "⚠️  Warning: sed not available. Please manually replace {{FIREBASE_API_KEY}} in admin-dashboard.html"
+    cp admin-dashboard-minimal.template.html admin-dashboard.html
+fi
+
+echo "✅ Modular dashboard generated with API keys injected (GitHub-safe)"
+echo "🎯 Features: User points display, enhanced trip cards, detailed trip viewing"
+echo "📊 Architecture: Fully modular components for easy maintenance"
 echo "🔍 SerpAPI integration for real-time flight search enabled"
 
 # Start Hotel proxy server in background
@@ -81,14 +89,17 @@ echo "✅ All services are running:"
 echo "   🏨 Hotel proxy: http://localhost:3002"
 echo "   🔍 SerpAPI proxy: http://localhost:3003"
 echo "   🌐 HTTP server: http://localhost:8000"
-echo "   🌍 Destination-based Admin Dashboard: http://localhost:8000/admin-dashboard.html"
 echo ""
-echo "🎯 New Dashboard Features:"
-echo "   • Multi-city trip planning (Madrid → Rome → Barcelona)"
-echo "   • Multiple hotel options per destination"
-echo "   • Real-time flight search via SerpAPI Google Flights"
-echo "   • Inter-city transport segments with live pricing"
-echo "   • Comprehensive cost breakdowns"
+echo "📊 Dashboard Access:"
+echo "   🎯 Main Dashboard: http://localhost:8000/admin-dashboard.html"
+echo ""
+echo "✨ Enhanced Features:"
+echo "   • 💳 User points display across all loyalty programs"
+echo "   • 📋 Complete trip intake form information in cards"
+echo "   • 🔍 Click trip cards to view full details"
+echo "   • ✏️ Edit button on each trip card for quick editing"
+echo "   • 📁 Modular component architecture (files under 25K tokens)"
+echo "   • 🚀 Fast loading and easy debugging"
 echo ""
 echo "To stop all services, press Ctrl+C or run: kill $FLIGHT_PROXY_PID $HOTEL_PROXY_PID $SERPAPI_PROXY_PID $HTTP_PID"
 

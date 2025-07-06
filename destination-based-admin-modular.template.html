@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Destination-Based Travel Admin Dashboard</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-firestore-compat.min.js"></script>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles/dashboard.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Utility Scripts -->
+    <script src="utils/dataHelpers.js"></script>
+    
+    <!-- Component Scripts -->
+    <script src="components/UserPointsDisplay.js"></script>
+    <script src="components/TripCard.js"></script>
+    <script src="components/TripDetailView.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "{{FIREBASE_API_KEY}}",
+            authDomain: "travel-consulting-app-1.firebaseapp.com",
+            projectId: "travel-consulting-app-1",
+            storageBucket: "travel-consulting-app-1.firebasestorage.app",
+            messagingSenderId: "123591590128",
+            appId: "1:123591590128:ios:ef15580e6e03d5e6160235"
+        };
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        // Authentication Component
+        const AuthComponent = () => {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
+                    setCurrentUser(user);
+                    setLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, []);
+
+            const signInWithGoogle = async () => {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                try {
+                    await firebase.auth().signInWithPopup(provider);
+                } catch (error) {
+                    console.error('Sign-in error:', error);
+                }
+            };
+
+            const signOut = async () => {
+                try {
+                    await firebase.auth().signOut();
+                } catch (error) {
+                    console.error('Sign-out error:', error);
+                }
+            };
+
+            if (loading) {
+                return <div className="loading">Loading...</div>;
+            }
+
+            if (!currentUser) {
+                return (
+                    <div className="container">
+                        <div className="header" style={{textAlign: 'center'}}>
+                            <h1>Travel Admin Dashboard</h1>
+                            <p>Please sign in to access the dashboard</p>
+                            <button 
+                                className="btn btn-primary" 
+                                onClick={signInWithGoogle}
+                                style={{marginTop: '20px'}}
+                            >
+                                Sign in with Google
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return <Dashboard currentUser={currentUser} onSignOut={signOut} />;
+        };
+
+        // Main Dashboard Component
+        const Dashboard = ({ currentUser, onSignOut }) => {
+            const [trips, setTrips] = useState([]);
+            const [selectedTrip, setSelectedTrip] = useState(null);
+            const [currentView, setCurrentView] = useState('list'); // 'list', 'detail', 'edit'
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+
+            // Load trips from Firebase
+            useEffect(() => {
+                if (!currentUser) return;
+
+                const unsubscribe = db.collection('trips')
+                    .orderBy('createdAt', 'desc')
+                    .onSnapshot((snapshot) => {
+                        const tripsData = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        }));
+                        setTrips(tripsData);
+                        setLoading(false);
+                    }, (error) => {
+                        console.error('Error loading trips:', error);
+                        setError('Failed to load trips');
+                        setLoading(false);
+                    });
+
+                return () => unsubscribe();
+            }, [currentUser]);
+
+            // Admin access check
+            if (currentUser.email !== 'nchristus93@gmail.com') {
+                return (
+                    <div className="container">
+                        <div className="header" style={{textAlign: 'center'}}>
+                            <h1>Access Denied</h1>
+                            <p>You do not have permission to access this admin dashboard.</p>
+                            <button 
+                                className="btn btn-secondary" 
+                                onClick={onSignOut}
+                                style={{marginTop: '20px'}}
+                            >
+                                Sign Out
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            const handleTripSelect = (trip) => {
+                setSelectedTrip(trip);
+                setCurrentView('detail');
+            };
+
+            const handleTripEdit = (trip) => {
+                setSelectedTrip(trip);
+                setCurrentView('edit');
+                // Note: Edit functionality would need to be implemented
+                // For now, redirect to the original template for editing
+                window.location.href = `admin-dashboard.html?tripId=${trip.id}`;
+            };
+
+            const handleBackToList = () => {
+                setSelectedTrip(null);
+                setCurrentView('list');
+            };
+
+            if (loading) {
+                return <div className="loading">Loading trips...</div>;
+            }
+
+            if (error) {
+                return (
+                    <div className="container">
+                        <div className="error-message">{error}</div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="container">
+                    {/* Header */}
+                    <div className="header">
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                            <div>
+                                <h1>Travel Admin Dashboard</h1>
+                                <p>Manage multi-city trips with destination-centric recommendations</p>
+                            </div>
+                            <div style={{textAlign: 'right', color: 'white'}}>
+                                <div style={{marginBottom: '8px', opacity: 0.9}}>
+                                    Signed in as: {currentUser.email}
+                                </div>
+                                <button 
+                                    className="btn btn-secondary" 
+                                    onClick={onSignOut}
+                                    style={{background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)'}}
+                                >
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* User Points Display */}
+                    <UserPointsDisplay currentUser={currentUser} />
+
+                    {/* Main Content */}
+                    {currentView === 'list' && (
+                        <div className="section">
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px'}}>
+                                <h2>All Trips ({trips.length})</h2>
+                                <button 
+                                    className="btn btn-primary"
+                                    onClick={() => window.location.href = 'admin-dashboard.html'}
+                                >
+                                    Create New Trip
+                                </button>
+                            </div>
+
+                            {trips.length === 0 ? (
+                                <div style={{
+                                    textAlign: 'center',
+                                    padding: '40px',
+                                    color: '#718096',
+                                    fontStyle: 'italic'
+                                }}>
+                                    No trips found. Create your first trip recommendation!
+                                </div>
+                            ) : (
+                                <div className="trip-grid">
+                                    {trips.map(trip => (
+                                        <TripCard
+                                            key={trip.id}
+                                            trip={trip}
+                                            onSelect={handleTripSelect}
+                                            isSelected={selectedTrip?.id === trip.id}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {currentView === 'detail' && selectedTrip && (
+                        <TripDetailView
+                            trip={selectedTrip}
+                            currentUser={currentUser}
+                            onBack={handleBackToList}
+                            onEdit={handleTripEdit}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        // Render the application
+        ReactDOM.render(<AuthComponent />, document.getElementById('root'));
+    </script>
+</body>
+</html>

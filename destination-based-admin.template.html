@@ -1141,6 +1141,9 @@
                         </div>
                     </div>
 
+                    {/* User Points Display */}
+                    <UserPointsDisplay currentUser={currentUser} />
+
                     {!isFullScreenMode ? (
                         <div className="section">
                             <h2>Trip Requests</h2>
@@ -1160,9 +1163,49 @@
                                         <div className="trip-destinations">
                                             {trip.startDate && formatDate(trip.startDate)} - {trip.endDate && formatDate(trip.endDate)}
                                         </div>
-                                        <span className={`status-badge status-${trip.status}`}>
-                                            {trip.status}
-                                        </span>
+                                        
+                                        {/* Enhanced Trip Information */}
+                                        <div style={{fontSize: '14px', color: '#4a5568', marginTop: '10px'}}>
+                                            {trip.budget && (
+                                                <div style={{marginBottom: '4px'}}>
+                                                    <strong>Budget:</strong> {trip.budget}
+                                                </div>
+                                            )}
+                                            {trip.groupSize && (
+                                                <div style={{marginBottom: '4px'}}>
+                                                    <strong>Group:</strong> {trip.groupSize} {trip.groupSize === 1 ? 'person' : 'people'}
+                                                </div>
+                                            )}
+                                            {trip.travelStyle && (
+                                                <div style={{marginBottom: '4px'}}>
+                                                    <strong>Style:</strong> {trip.travelStyle}
+                                                </div>
+                                            )}
+                                            {trip.flightClass && (
+                                                <div style={{marginBottom: '4px'}}>
+                                                    <strong>Flight Class:</strong> {trip.flightClass}
+                                                </div>
+                                            )}
+                                            {trip.interests && trip.interests.length > 0 && (
+                                                <div style={{marginBottom: '4px'}}>
+                                                    <strong>Interests:</strong> {trip.interests.slice(0, 3).join(', ')}{trip.interests.length > 3 ? '...' : ''}
+                                                </div>
+                                            )}
+                                            {trip.flexibleDates && (
+                                                <div style={{fontSize: '12px', color: '#48bb78', marginTop: '6px'}}>
+                                                    ✓ Flexible dates
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px'}}>
+                                            <span className={`status-badge status-${trip.status}`}>
+                                                {trip.status}
+                                            </span>
+                                            <div style={{fontSize: '12px', color: '#718096'}}>
+                                                Click to view details
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
