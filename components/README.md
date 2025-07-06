@@ -1,14 +1,15 @@
 # Dashboard Components
 
-This directory contains modular React components for the travel admin dashboard.
+This directory contains modular JavaScript components for the travel admin dashboard.
 
 ## Component Structure
 
 ### Core Components
 - `UserPointsDisplay.js` - Displays user's points across all programs
-- `TripsList.js` - Lists all trips in card format
 - `TripDetailView.js` - Shows detailed trip information and intake form data
 - `TripCard.js` - Individual trip card component
+- `Dashboard.js` - Main dashboard component
+- `AuthComponent.js` - Authentication handling
 
 ### Tab Components
 - `ActivitiesTab.js` - Destination-based activity and restaurant recommendations
@@ -17,17 +18,14 @@ This directory contains modular React components for the travel admin dashboard.
 - `CostsTab.js` - Cost calculation and breakdown
 - `OverviewTab.js` - Trip overview and summary
 
-### Utility Components
-- `TabNavigation.js` - Tab switching interface
-- `LoadingSpinner.js` - Loading indicators
-
 ## Usage
 
 Each component is designed to be imported into the main template:
 
 ```html
 <script src="components/UserPointsDisplay.js"></script>
-<script src="components/TripsList.js"></script>
+<script src="components/TripCard.js"></script>
+<script src="components/Dashboard.js"></script>
 <!-- etc -->
 ```
 

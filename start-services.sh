@@ -55,10 +55,10 @@ echo "🔧 Generating destination-based admin dashboard with API keys..."
 # Generate minimal modular dashboard (new main dashboard)
 if command -v sed >/dev/null 2>&1; then
     sed -e "s/{{FIREBASE_API_KEY}}/$FIREBASE_API_KEY/g" \
-        admin-dashboard-minimal.template.html > admin-dashboard.html
+        admin-dashboard.template.html > admin-dashboard.html
 else
     echo "⚠️  Warning: sed not available. Please manually replace {{FIREBASE_API_KEY}} in admin-dashboard.html"
-    cp admin-dashboard-minimal.template.html admin-dashboard.html
+    cp admin-dashboard.template.html admin-dashboard.html
 fi
 
 echo "✅ Modular dashboard generated with API keys injected (GitHub-safe)"
@@ -101,10 +101,10 @@ echo "   • ✏️ Edit button on each trip card for quick editing"
 echo "   • 📁 Modular component architecture (files under 25K tokens)"
 echo "   • 🚀 Fast loading and easy debugging"
 echo ""
-echo "To stop all services, press Ctrl+C or run: kill $FLIGHT_PROXY_PID $HOTEL_PROXY_PID $SERPAPI_PROXY_PID $HTTP_PID"
+echo "To stop all services, press Ctrl+C or run: kill $HOTEL_PROXY_PID $SERPAPI_PROXY_PID $HTTP_PID"
 
 # Keep script running and handle Ctrl+C
-trap "echo ''; echo '🛑 Stopping services...'; kill $FLIGHT_PROXY_PID $HOTEL_PROXY_PID $SERPAPI_PROXY_PID $HTTP_PID 2>/dev/null; exit" INT
+trap "echo ''; echo '🛑 Stopping services...'; kill $HOTEL_PROXY_PID $SERPAPI_PROXY_PID $HTTP_PID 2>/dev/null; exit" INT
 
 # Wait for background processes
 wait

@@ -1,12 +1,12 @@
 {
-  "name": "flight-api-proxy",
+  "name": "travel-admin-proxy",
   "version": "1.0.0",
-  "description": "FlightAware API proxy server for travel admin dashboard",
-  "main": "flight-proxy-server.js",
+  "description": "Travel API proxy servers for admin dashboard (Hotel + SerpAPI)",
+  "main": "hotel-proxy-server.js",
   "scripts": {
-    "start": "node flight-proxy-server.js",
+    "start": "./start-services.sh",
     "start:hotel": "node hotel-proxy-server.js",
-    "dev": "nodemon flight-proxy-server.js",
+    "dev:serpapi": "nodemon serpapi-proxy-server.js",
     "dev:hotel": "nodemon hotel-proxy-server.js"
   },
   "dependencies": {
@@ -18,7 +18,7 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["flight", "api", "proxy", "flightaware", "travel"],
+  "keywords": ["travel", "api", "proxy", "hotel", "serpapi", "admin", "dashboard"],
   "author": "Travel Admin",
   "license": "MIT"
 }

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Admin Dashboard</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-firestore-compat.min.js"></script>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles/dashboard.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Configure API endpoints -->
+    <script>
+        // Configure TripAdvisor hotel proxy (from start-services.sh)
+        window.HOTEL_PROXY_URL = 'http://localhost:3002';
+    </script>
+
+    <!-- Initialize Firebase -->
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "{{FIREBASE_API_KEY}}",
+            authDomain: "travel-consulting-app-1.firebaseapp.com",
+            projectId: "travel-consulting-app-1",
+            storageBucket: "travel-consulting-app-1.firebasestorage.app",
+            messagingSenderId: "123591590128",
+            appId: "1:123591590128:ios:ef15580e6e03d5e6160235"
+        };
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+    </script>
+
+    <!-- Utility Scripts -->
+    <script src="utils/dataHelpers.js"></script>
+    
+    <!-- Component Scripts -->
+    <script src="components/UserPointsDisplay.js"></script>
+    <script src="components/TripCard.js"></script>
+    <script src="components/TripDetailView.js"></script>
+    <script src="components/Dashboard.js"></script>
+    <script src="components/AuthComponent.js"></script>
+    
+    <!-- Tab Component Scripts -->
+    <script src="components/OverviewTab.js"></script>
+    <script src="components/DestinationsTab.js"></script>
+    <script src="components/LogisticsTab.js"></script>
+    <script src="components/ActivitiesTab.js"></script>
+    <script src="components/CostsTab.js"></script>
+
+    <!-- Initialize App -->
+    <script>
+        // Wait for all components to load
+        function initializeApp() {
+            // Check if all required components are loaded
+            const requiredComponents = [
+                'AuthComponent',
+                'Dashboard', 
+                'UserPointsDisplay',
+                'TripCard',
+                'TripDetailView',
+                'OverviewTab',
+                'DestinationsTab',
+                'LogisticsTab',
+                'ActivitiesTab',
+                'CostsTab'
+            ];
+            
+            const missingComponents = requiredComponents.filter(name => !window[name]);
+            
+            if (missingComponents.length > 0) {
+                console.error('Missing components:', missingComponents);
+                document.getElementById('root').innerHTML = 
+                    '<div style="padding: 20px; color: red;">Error: Missing components: ' + 
+                    missingComponents.join(', ') + '</div>';
+                return;
+            }
+            
+            // Check if DataHelpers is loaded
+            if (!window.DataHelpers) {
+                console.error('DataHelpers not loaded');
+                document.getElementById('root').innerHTML = 
+                    '<div style="padding: 20px; color: red;">Error: DataHelpers not loaded</div>';
+                return;
+            }
+            
+            try {
+                ReactDOM.render(
+                    React.createElement(window.AuthComponent),
+                    document.getElementById('root')
+                );
+                console.log('🚀 Travel Admin Dashboard loaded successfully');
+            } catch (error) {
+                console.error('Error initializing app:', error);
+                document.getElementById('root').innerHTML = 
+                    '<div style="padding: 20px; color: red;">Error initializing app: ' + error.message + '</div>';
+            }
+        }
+        
+        // Initialize when page is loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
+    </script>
+</body>
+</html>
