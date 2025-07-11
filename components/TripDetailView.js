@@ -50,6 +50,7 @@ window.TripDetailView = ({ trip, currentUser, onBack, onEdit }) => {
         return destination || 'Not specified';
     };
 
+
     return React.createElement('div', {
         className: 'trip-detail-view',
         style: {
@@ -208,6 +209,14 @@ window.TripDetailView = ({ trip, currentUser, onBack, onEdit }) => {
             }, [
                 React.createElement('h3', { key: 'basicTitle' }, '📅 Trip Details'),
                 React.createElement('div', { key: 'basicContent' }, [
+                    trip.departureLocation && React.createElement('p', { key: 'departure' }, [
+                        React.createElement('strong', null, 'From: '),
+                        trip.departureLocation
+                    ]),
+                    React.createElement('p', { key: 'destination' }, [
+                        React.createElement('strong', null, 'To: '),
+                        formatDestinations(trip.destinations, trip.destination)
+                    ]),
                     React.createElement('p', { key: 'dates' }, [
                         React.createElement('strong', null, 'Dates: '),
                         trip.startDate && window.DataHelpers.formatDate(trip.startDate),
@@ -217,6 +226,10 @@ window.TripDetailView = ({ trip, currentUser, onBack, onEdit }) => {
                     React.createElement('p', { key: 'flexible' }, [
                         React.createElement('strong', null, 'Flexible Dates: '),
                         trip.flexibleDates ? 'Yes' : 'No'
+                    ]),
+                    trip.flexibleDates && trip.tripDuration && React.createElement('p', { key: 'duration' }, [
+                        React.createElement('strong', null, 'Trip Duration: '),
+                        `${trip.tripDuration} ${trip.tripDuration === 1 ? 'day' : 'days'}`
                     ]),
                     React.createElement('p', { key: 'status' }, [
                         React.createElement('strong', null, 'Status: '),

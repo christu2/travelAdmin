@@ -11,6 +11,33 @@
  */
 
 window.TripCard = ({ trip, onSelect, onEdit, isSelected = false }) => {
+    const [userName, setUserName] = React.useState(null);
+    const [loading, setLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        const fetchUserName = async () => {
+            if (!trip.userId) {
+                setLoading(false);
+                return;
+            }
+            
+            try {
+                const userDoc = await firebase.firestore().collection('users').doc(trip.userId).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    setUserName(userData.name || userData.displayName || 'Unknown User');
+                }
+            } catch (error) {
+                console.error('Error fetching user name:', error);
+                setUserName('Unknown User');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchUserName();
+    }, [trip.userId]);
+
     const handleCardClick = (e) => {
         onSelect(trip);
     };
@@ -32,6 +59,18 @@ window.TripCard = ({ trip, onSelect, onEdit, isSelected = false }) => {
             trip.id.substring(0, 8)
         ].join('')),
 
+        // User name
+        React.createElement('div', {
+            key: 'user-name',
+            style: {
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#4a5568',
+                marginTop: '4px',
+                marginBottom: '8px'
+            }
+        }, loading ? '👤 Loading...' : `👤 ${userName || 'Unknown User'}`),
+
         // Trip title (destinations)
         React.createElement('div', {
             key: 'title',
@@ -52,6 +91,14 @@ window.TripCard = ({ trip, onSelect, onEdit, isSelected = false }) => {
             key: 'enhanced-info',
             style: { fontSize: '14px', color: '#4a5568', marginTop: '10px' }
         }, [
+            // Departure city - extract from trip data
+            trip.departureLocation && React.createElement('div', {
+                key: 'departure-city',
+                style: { marginBottom: '4px', fontWeight: '600', color: '#2d3748' }
+            }, [
+                React.createElement('strong', null, 'From: '),
+                trip.departureLocation
+            ]),
             trip.budget && React.createElement('div', {
                 key: 'budget',
                 style: { marginBottom: '4px' }

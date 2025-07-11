@@ -23,33 +23,63 @@ window.DestinationsTab = ({
     // Ensure destinations array exists
     const destinations = recommendation?.destinations || [];
 
-    // Helper function to create TripAdvisor booking URL with dates
-    const createTripAdvisorBookingUrl = (baseUrl, checkInDate, checkOutDate) => {
-        try {
-            // Format dates for TripAdvisor (YYYY-MM-DD)
-            const formatDate = (dateStr) => {
-                const date = new Date(dateStr);
-                return date.toISOString().split('T')[0];
-            };
+    // Helper function to calculate and update nights and total cost
+    const updateCalculatedValues = (destIndex, accIndex) => {
+        // Get fresh data from recommendation instead of stale destinations array
+        const destination = recommendation?.destinations?.[destIndex];
+        const accommodation = destination?.accommodationOptions?.[accIndex];
+        
+        console.log('Updating calculated values for destination', destIndex, 'accommodation', accIndex);
+        console.log('Destination dates:', destination?.arrivalDate, 'to', destination?.departureDate);
+        
+        if (destination?.arrivalDate && destination?.departureDate && accommodation) {
+            const checkIn = new Date(destination.arrivalDate);
+            const checkOut = new Date(destination.departureDate);
+            const timeDiff = checkOut.getTime() - checkIn.getTime();
+            const nights = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
             
-            const checkIn = formatDate(checkInDate);
-            const checkOut = formatDate(checkOutDate);
+            console.log('Calculated nights:', nights);
             
-            // TripAdvisor uses semicolon-separated parameters in their URL format
-            // Based on research: checkin=2013-08-30;checkout=2013-08-31;adults=2;rooms=1
-            const dateParams = `checkin=${checkIn};checkout=${checkOut};adults=2;rooms=1`;
+            // Update the number of nights at both levels for consistency
+            updateRecommendation(`destinations[${destIndex}].numberOfNights`, nights);
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.totalCost.totalNights`, nights);
             
-            // Add parameters to URL with proper separator
-            if (baseUrl.includes('?')) {
-                return `${baseUrl}&${dateParams}`;
-            } else {
-                return `${baseUrl}?${dateParams}`;
-            }
-        } catch (error) {
-            console.log('Could not parse TripAdvisor URL for date injection:', error);
-            return baseUrl; // Return original URL if parsing fails
+            // Calculate and update total cost
+            const pricePerNight = accommodation.hotel?.pricePerNight || 0;
+            const totalCost = pricePerNight * nights;
+            
+            console.log('Price per night:', pricePerNight, 'Total cost:', totalCost);
+            
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.totalCost.totalCashValue`, totalCost);
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.totalCost.cashAmount`, totalCost);
+        } else {
+            console.log('Missing data for calculation:', {
+                hasArrivalDate: !!destination?.arrivalDate,
+                hasDepartureDate: !!destination?.departureDate,
+                hasAccommodation: !!accommodation
+            });
         }
     };
+
+    // Helper function to format dates for HTML date input
+    const formatDateForInput = (dateValue) => {
+        if (!dateValue) return '';
+        
+        // If already in yyyy-MM-dd format, return as-is
+        if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            return dateValue;
+        }
+        
+        // Parse various date formats and convert to yyyy-MM-dd
+        try {
+            const date = new Date(dateValue);
+            if (isNaN(date.getTime())) return '';
+            return date.toISOString().split('T')[0];
+        } catch (error) {
+            return '';
+        }
+    };
+
 
     // TripAdvisor auto-fill function
     const autoFillFromTripAdvisor = async (tripAdvisorId, destIndex, accIndex) => {
@@ -62,6 +92,13 @@ window.DestinationsTab = ({
             
             // Use the configured hotel proxy server from start-services.sh
             const hotelProxyUrl = window.HOTEL_PROXY_URL || 'http://localhost:3002';
+            
+            // Check if proxy is available (only works locally due to IP restrictions)
+            if (!window.HOTEL_PROXY_URL) {
+                alert('TripAdvisor auto-fill is only available when running locally due to API IP restrictions. You can still manually enter hotel details.');
+                return;
+            }
+            
             const response = await fetch(`${hotelProxyUrl}/api/hotels/details/${tripAdvisorId}`);
                 
             if (response.ok) {
@@ -87,13 +124,9 @@ window.DestinationsTab = ({
                     if (hotel.description) {
                         updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.detailedDescription`, hotel.description);
                     }
-                    // Create booking URL with dates if available
-                    let bookingUrl = hotel.tripadvisorUrl;
-                    if (destination.checkInDate && destination.checkOutDate && hotel.tripadvisorUrl) {
-                        bookingUrl = createTripAdvisorBookingUrl(hotel.tripadvisorUrl, destination.checkInDate, destination.checkOutDate);
-                    }
-                    if (bookingUrl) {
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.bookingUrl`, bookingUrl);
+                    // Set TripAdvisor URL directly from API
+                    if (hotel.tripadvisorUrl) {
+                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, hotel.tripadvisorUrl);
                     }
                     
                     console.log('✅ Auto-filled hotel details from TripAdvisor:', hotel.name);
@@ -104,12 +137,9 @@ window.DestinationsTab = ({
             // Fallback: Use TripAdvisor ID for manual lookup
             updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, `Hotel from TripAdvisor ID: ${tripAdvisorId}`);
             
-            // Create fallback booking URL with dates if available
-            let fallbackUrl = `https://www.tripadvisor.com/Hotel_Review-d${tripAdvisorId}.html`;
-            if (destination.checkInDate && destination.checkOutDate) {
-                fallbackUrl = createTripAdvisorBookingUrl(fallbackUrl, destination.checkInDate, destination.checkOutDate);
-            }
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.bookingUrl`, fallbackUrl);
+            // Create fallback TripAdvisor URL
+            let fallbackTripAdvisorUrl = `https://www.tripadvisor.com/Hotel_Review-d${tripAdvisorId}.html`;
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, fallbackTripAdvisorUrl);
             
             console.log('ℹ️ TripAdvisor API not available via hotel proxy. Using manual lookup.');
             console.log('📋 TripAdvisor ID stored:', tripAdvisorId);
@@ -118,12 +148,9 @@ window.DestinationsTab = ({
             // Fallback: Just set the ID and basic info
             updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, `Hotel from TripAdvisor ID: ${tripAdvisorId}`);
             
-            // Create error fallback booking URL with dates if available
-            let errorFallbackUrl = `https://www.tripadvisor.com/Hotel_Review-d${tripAdvisorId}.html`;
-            if (destination.checkInDate && destination.checkOutDate) {
-                errorFallbackUrl = createTripAdvisorBookingUrl(errorFallbackUrl, destination.checkInDate, destination.checkOutDate);
-            }
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.bookingUrl`, errorFallbackUrl);
+            // Create error fallback TripAdvisor URL
+            let errorFallbackTripAdvisorUrl = `https://www.tripadvisor.com/Hotel_Review-d${tripAdvisorId}.html`;
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, errorFallbackTripAdvisorUrl);
             
             console.log('ℹ️ TripAdvisor API error, using manual lookup:', error.message);
         }
@@ -185,8 +212,27 @@ window.DestinationsTab = ({
                         React.createElement('input', {
                             key: 'input',
                             type: 'date',
-                            value: destination.checkInDate || '',
-                            onChange: (e) => updateRecommendation(`destinations[${destIndex}].checkInDate`, e.target.value)
+                            value: formatDateForInput(destination.arrivalDate) || '',
+                            onChange: (e) => {
+                                updateRecommendation(`destinations[${destIndex}].arrivalDate`, e.target.value);
+                                
+                                // Auto-set checkout date to next day if not already set
+                                if (e.target.value && !destination.departureDate) {
+                                    const checkInDate = new Date(e.target.value);
+                                    const checkOutDate = new Date(checkInDate);
+                                    checkOutDate.setDate(checkOutDate.getDate() + 1);
+                                    const checkOutValue = checkOutDate.toISOString().split('T')[0];
+                                    updateRecommendation(`destinations[${destIndex}].departureDate`, checkOutValue);
+                                }
+                                
+                                // Update calculated values for all accommodations
+                                // Use requestAnimationFrame to ensure DOM is updated first
+                                requestAnimationFrame(() => {
+                                    (recommendation?.destinations?.[destIndex]?.accommodationOptions || []).forEach((_, accIndex) => {
+                                        updateCalculatedValues(destIndex, accIndex);
+                                    });
+                                });
+                            }
                         })
                     ]),
                     React.createElement('div', {
@@ -197,8 +243,19 @@ window.DestinationsTab = ({
                         React.createElement('input', {
                             key: 'input',
                             type: 'date',
-                            value: destination.checkOutDate || '',
-                            onChange: (e) => updateRecommendation(`destinations[${destIndex}].checkOutDate`, e.target.value)
+                            value: formatDateForInput(destination.departureDate) || '',
+                            min: destination.arrivalDate ? formatDateForInput(destination.arrivalDate) : undefined,
+                            onChange: (e) => {
+                                updateRecommendation(`destinations[${destIndex}].departureDate`, e.target.value);
+                                
+                                // Update calculated values for all accommodations
+                                // Use requestAnimationFrame to ensure DOM is updated first
+                                requestAnimationFrame(() => {
+                                    (recommendation?.destinations?.[destIndex]?.accommodationOptions || []).forEach((_, accIndex) => {
+                                        updateCalculatedValues(destIndex, accIndex);
+                                    });
+                                });
+                            }
                         })
                     ])
                 ]),
@@ -402,7 +459,14 @@ window.DestinationsTab = ({
                                         key: 'input',
                                         type: 'number',
                                         value: option.hotel.pricePerNight,
-                                        onChange: (e) => updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.pricePerNight`, parseFloat(e.target.value))
+                                        onChange: (e) => {
+                                            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.pricePerNight`, parseFloat(e.target.value));
+                                            
+                                            // Update calculated values when price changes
+                                            requestAnimationFrame(() => {
+                                                updateCalculatedValues(destIndex, accIndex);
+                                            });
+                                        }
                                     })
                                 ]),
                                 React.createElement('div', {
@@ -431,18 +495,40 @@ window.DestinationsTab = ({
                                             border: '1px solid #e2e8f0',
                                             borderRadius: '4px',
                                             fontSize: '14px',
-                                            color: '#4a5568'
+                                            color: '#4a5568',
+                                            marginBottom: '8px'
                                         }
                                     }, (() => {
-                                        if (destination.checkInDate && destination.checkOutDate) {
-                                            const checkIn = new Date(destination.checkInDate);
-                                            const checkOut = new Date(destination.checkOutDate);
+                                        if (destination.arrivalDate && destination.departureDate) {
+                                            const checkIn = new Date(destination.arrivalDate);
+                                            const checkOut = new Date(destination.departureDate);
                                             const timeDiff = checkOut.getTime() - checkIn.getTime();
-                                            const nights = Math.ceil(timeDiff / (1000 * 3600 * 24));
-                                            return nights > 0 ? `${nights} nights (calculated from dates)` : 'Please set valid dates';
+                                            const nights = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
+                                            const pricePerNight = option.hotel.pricePerNight || 0;
+                                            const totalCost = pricePerNight * nights;
+                                            
+                                            if (nights > 0) {
+                                                return `${nights} nights × $${pricePerNight} = $${totalCost.toFixed(2)} total`;
+                                            } else {
+                                                return 'Please set valid dates';
+                                            }
                                         }
                                         return 'Set check-in and check-out dates above';
-                                    })())
+                                    })()),
+                                    React.createElement('button', {
+                                        key: 'calculate-btn',
+                                        type: 'button',
+                                        onClick: () => updateCalculatedValues(destIndex, accIndex),
+                                        style: {
+                                            fontSize: '11px',
+                                            padding: '4px 8px',
+                                            background: '#4299e1',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer'
+                                        }
+                                    }, 'Update Database')
                                 ])
                             ]),
 
@@ -491,6 +577,18 @@ window.DestinationsTab = ({
                                         type: 'url',
                                         value: option.hotel.bookingUrl,
                                         onChange: (e) => updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.bookingUrl`, e.target.value)
+                                    })
+                                ]),
+                                React.createElement('div', {
+                                    key: 'tripadvisor-url-group',
+                                    className: 'form-group'
+                                }, [
+                                    React.createElement('label', { key: 'label' }, 'TripAdvisor URL'),
+                                    React.createElement('input', {
+                                        key: 'input',
+                                        type: 'url',
+                                        value: option.hotel.tripadvisorUrl || '',
+                                        onChange: (e) => updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, e.target.value)
                                     })
                                 ])
                             ]),

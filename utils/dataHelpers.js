@@ -10,7 +10,7 @@ const generateId = () => {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
 };
 
-// Date formatting function
+// Date formatting function for display
 const formatDate = (dateInput) => {
     if (!dateInput) return '';
     
@@ -31,6 +31,31 @@ const formatDate = (dateInput) => {
         month: 'short',
         day: 'numeric'
     });
+};
+
+// Date formatting function for HTML date inputs (yyyy-MM-dd)
+const formatDateForInput = (dateInput) => {
+    if (!dateInput) return '';
+    
+    let date;
+    if (dateInput.toDate) {
+        // Firebase Timestamp
+        date = dateInput.toDate();
+    } else if (dateInput instanceof Date) {
+        date = dateInput;
+    } else if (typeof dateInput === 'string') {
+        // If already in yyyy-MM-dd format, return as-is
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+            return dateInput;
+        }
+        date = new Date(dateInput);
+    } else {
+        return '';
+    }
+    
+    if (isNaN(date.getTime())) return '';
+    
+    return date.toISOString().split('T')[0];
 };
 
 // Trip status formatting
@@ -77,7 +102,8 @@ const createEmptyDestination = () => ({
     numberOfNights: 1,
     accommodationOptions: [],
     recommendedActivities: [],
-    recommendedRestaurants: []
+    recommendedRestaurants: [],
+    selectedAccommodationId: null
 });
 
 const createEmptyActivityRecommendation = () => ({
@@ -223,8 +249,8 @@ const createEmptyRecommendation = (trip) => {
         ? destinations.map(cityName => ({
             id: generateId(),
             cityName: cityName,
-            checkInDate: '',
-            checkOutDate: '',
+            arrivalDate: '',
+            departureDate: '',
             numberOfNights: 1,
             accommodationOptions: [{
                 id: generateId(),
@@ -247,8 +273,8 @@ const createEmptyRecommendation = (trip) => {
         : [{
             id: generateId(),
             cityName: '',
-            checkInDate: '',
-            checkOutDate: '',
+            arrivalDate: '',
+            departureDate: '',
             numberOfNights: 1,
             accommodationOptions: [{
                 id: generateId(),
@@ -270,30 +296,117 @@ const createEmptyRecommendation = (trip) => {
         }];
     
     return {
+        id: generateId(),
         tripOverview: '',
         destinations: defaultDestinations,
         logistics: {
-            transportSegments: [{
-                id: generateId(),
-                type: 'flight',
-                from: '',
-                to: '',
-                date: '',
-                time: '',
-                airline: '',
-                flightNumber: '',
-                cost: 0,
-                pointsCost: 0,
-                bookingUrl: '',
-                notes: ''
-            }]
+            transportSegments: [createEmptyTransportSegment()],
+            bookingDeadlines: [],
+            generalInstructions: ''
         },
         totalCost: {
-            accommodation: 0,
+            totalEstimate: 0,
             flights: 0,
-            total: 0
-        }
+            accommodation: 0,
+            activities: 0,
+            food: 0,
+            localTransport: 0,
+            miscellaneous: 0,
+            currency: 'USD'
+        },
+        createdAt: null
     };
+};
+
+// Create empty transport segment
+const createEmptyTransportSegment = () => ({
+    id: generateId(),
+    fromCity: '',
+    toCity: '',
+    departureDate: '',
+    transportOptions: [],
+    selectedOptionId: null,
+    segmentType: 'outbound', // outbound, inbound, domestic, connecting
+    bookingGroupId: null,
+    displaySequence: null
+});
+
+// Create empty transport option
+const createEmptyTransportOption = (segmentDate = null) => ({
+    id: generateId(),
+    transportType: 'flight',
+    priority: 1,
+    cost: {
+        paymentType: 'cash',
+        cashAmount: 0,
+        totalCashValue: 0,
+        pointsAmount: null,
+        pointsProgram: null
+    },
+    details: createEmptyTransportDetails('flight', segmentDate),
+    duration: '',
+    bookingUrl: '',
+    notes: '',
+    isRoundTrip: false,
+    linkedSegmentId: null,
+    recommendedSelection: false
+});
+
+// Create empty transport details based on type
+const createEmptyTransportDetails = (transportType, segmentDate = null) => {
+    switch (transportType) {
+        case 'flight':
+            return {
+                flightNumber: '',
+                airline: '',
+                departureAirportName: '',
+                arrivalAirportName: '',
+                class: 'economy',
+                aircraft: '',
+                details: {
+                    departure: {
+                        airportCode: '',
+                        time: '',
+                        date: segmentDate || '' // Auto-fill with segment departure date
+                    },
+                    arrival: {
+                        airportCode: '',
+                        time: '',
+                        date: ''
+                    },
+                    route: '',
+                    showDateChange: false
+                }
+            };
+        case 'train':
+            return {
+                details: {
+                    operatorName: '',
+                    trainNumber: '',
+                    departure: {
+                        stationCode: '',
+                        time: '',
+                        date: ''
+                    },
+                    arrival: {
+                        stationCode: '',
+                        time: '',
+                        date: ''
+                    }
+                }
+            };
+        case 'car':
+            return {
+                details: {
+                    company: '',
+                    carType: '',
+                    pickupLocation: '',
+                    dropoffLocation: ''
+                }
+            };
+        default:
+            return {};
+    }
 };
 
 // Convert legacy recommendation format to new format
@@ -307,6 +420,7 @@ const convertLegacyRecommendation = (legacyRec) => {
 window.DataHelpers = {
     generateId,
     formatDate,
+    formatDateForInput,
     formatTripStatus,
     formatCurrency,
     formatPoints,
@@ -315,6 +429,9 @@ window.DataHelpers = {
     createEmptyActivityRecommendation,
     createEmptyRestaurantRecommendation,
     createEmptyAccommodation,
+    createEmptyTransportSegment,
+    createEmptyTransportOption,
+    createEmptyTransportDetails,
     validateTripData,
     calculateTripDuration,
     formatDestinations,

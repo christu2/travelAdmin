@@ -202,7 +202,11 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
         if (!updated.logistics.transportSegments[segmentIndex].transportOptions) {
             updated.logistics.transportSegments[segmentIndex].transportOptions = [];
         }
-        updated.logistics.transportSegments[segmentIndex].transportOptions.push(window.DataHelpers?.createEmptyTransportOption?.() || {
+        
+        // Get the segment's departure date to auto-fill the transport option
+        const segmentDate = updated.logistics.transportSegments[segmentIndex].departureDate;
+        
+        updated.logistics.transportSegments[segmentIndex].transportOptions.push(window.DataHelpers?.createEmptyTransportOption?.(segmentDate) || {
             id: Date.now().toString(),
             transportType: 'flight',
             priority: 1,
@@ -211,7 +215,13 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                 cashAmount: 0,
                 totalCashValue: 0
             },
-            details: {},
+            details: {
+                details: {
+                    departure: {
+                        date: segmentDate || ''
+                    }
+                }
+            },
             duration: '',
             notes: ''
         });
@@ -396,6 +406,20 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                         key: 'trip-info',
                         style: { fontSize: '13px', lineHeight: '1.4' }
                     }, [
+                        selectedTrip.departureLocation && React.createElement('div', {
+                            key: 'departure',
+                            style: { marginBottom: '8px' }
+                        }, [
+                            React.createElement('strong', null, 'From: '),
+                            selectedTrip.departureLocation
+                        ]),
+                        React.createElement('div', {
+                            key: 'destination',
+                            style: { marginBottom: '8px' }
+                        }, [
+                            React.createElement('strong', null, 'To: '),
+                            selectedTrip.destinations ? selectedTrip.destinations.join(' → ') : selectedTrip.destination
+                        ]),
                         React.createElement('div', {
                             key: 'dates',
                             style: { marginBottom: '8px' }
@@ -473,6 +497,13 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                             key: 'flexible',
                             style: { color: '#48bb78', fontSize: '12px', marginTop: '6px' }
                         }, '✓ Flexible dates'),
+                        selectedTrip.flexibleDates && selectedTrip.tripDuration && React.createElement('div', {
+                            key: 'duration',
+                            style: { fontSize: '12px', marginTop: '4px' }
+                        }, [
+                            React.createElement('strong', null, 'Duration: '),
+                            `${selectedTrip.tripDuration} ${selectedTrip.tripDuration === 1 ? 'day' : 'days'}`
+                        ]),
                         selectedTrip.additionalNotes && React.createElement('div', {
                             key: 'notes',
                             style: { marginTop: '8px', padding: '8px', background: '#f7fafc', borderRadius: '4px', fontSize: '12px' }
@@ -510,7 +541,12 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                     key: 'costs-tab',
                     className: activeTab === 'costs' ? 'active' : '',
                     onClick: () => setActiveTab('costs')
-                }, 'Costs')
+                }, 'Costs'),
+                React.createElement('button', {
+                    key: 'conversations-tab',
+                    className: activeTab === 'conversations' ? 'active' : '',
+                    onClick: () => setActiveTab('conversations')
+                }, 'Conversations')
             ]),
 
             // Tab Content
@@ -570,7 +606,16 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                 }) : React.createElement('div', {
                     key: 'costs-placeholder',
                     style: { padding: '20px', textAlign: 'center', color: '#718096' }
-                }, 'Costs tab component not loaded yet - please use the original dashboard for editing'))
+                }, 'Costs tab component not loaded yet - please use the original dashboard for editing')),
+
+            activeTab === 'conversations' && (window.ConversationsTab ? 
+                React.createElement(window.ConversationsTab, {
+                    key: 'conversations-content',
+                    selectedTrip: selectedTrip
+                }) : React.createElement('div', {
+                    key: 'conversations-placeholder',
+                    style: { padding: '20px', textAlign: 'center', color: '#718096' }
+                }, 'Conversations tab component not loaded yet'))
         ])
     ]);
 };

@@ -56,6 +56,165 @@ window.LogisticsTab = ({
                     }, 'Remove Segment') : null
                 ]),
 
+                // Segment Details Form
+                React.createElement('div', {
+                    key: 'segment-details',
+                    style: { 
+                        background: '#f8f9fa', 
+                        padding: '15px', 
+                        borderRadius: '8px', 
+                        marginBottom: '20px',
+                        border: '1px solid #e2e8f0'
+                    }
+                }, [
+                    React.createElement('h5', {
+                        key: 'segment-details-title',
+                        style: { margin: '0 0 15px 0', color: '#2d3748' }
+                    }, '🚗 Segment Details'),
+                    
+                    React.createElement('div', { key: 'segment-row1', className: 'form-row' }, [
+                        React.createElement('div', { key: 'from-city-group', className: 'form-group' }, [
+                            React.createElement('label', { key: 'from-city-label' }, 'From City'),
+                            React.createElement('input', {
+                                key: 'from-city-input',
+                                type: 'text',
+                                value: segment.fromCity || '',
+                                onChange: (e) => updateRecommendation(`logistics.transportSegments[${segmentIndex}].fromCity`, e.target.value),
+                                placeholder: 'e.g., Chicago, Paris, Rome'
+                            })
+                        ]),
+                        React.createElement('div', { key: 'to-city-group', className: 'form-group' }, [
+                            React.createElement('label', { key: 'to-city-label' }, 'To City'),
+                            React.createElement('input', {
+                                key: 'to-city-input',
+                                type: 'text',
+                                value: segment.toCity || '',
+                                onChange: (e) => updateRecommendation(`logistics.transportSegments[${segmentIndex}].toCity`, e.target.value),
+                                placeholder: 'e.g., Chicago, Paris, Rome'
+                            })
+                        ])
+                    ]),
+                    
+                    React.createElement('div', { key: 'segment-row2', className: 'form-row' }, [
+                        React.createElement('div', { key: 'departure-date-group', className: 'form-group' }, [
+                            React.createElement('label', { key: 'departure-date-label' }, 'Departure Date'),
+                            React.createElement('input', {
+                                key: 'departure-date-input',
+                                type: 'date',
+                                value: segment.departureDate || '',
+                                onChange: (e) => {
+                                    const newDate = e.target.value;
+                                    updateRecommendation(`logistics.transportSegments[${segmentIndex}].departureDate`, newDate);
+                                    
+                                    // Auto-fill all transport option search dates with the new segment date
+                                    if (newDate && transportOptions.length > 0) {
+                                        transportOptions.forEach((option, optionIndex) => {
+                                            // Only auto-fill if the search date is empty or matches the old segment date
+                                            const currentSearchDate = option.details?.departure?.date || '';
+                                            const oldSegmentDate = segment.departureDate || '';
+                                            
+                                            if (!currentSearchDate || currentSearchDate === oldSegmentDate) {
+                                                updateRecommendation(`logistics.transportSegments[${segmentIndex}].transportOptions[${optionIndex}].details.departure.date`, newDate);
+                                            }
+                                        });
+                                    }
+                                }
+                            })
+                        ]),
+                        React.createElement('div', { key: 'segment-type-group', className: 'form-group' }, [
+                            React.createElement('label', { key: 'segment-type-label' }, 'Segment Type'),
+                            React.createElement('select', {
+                                key: 'segment-type-select',
+                                value: segment.segmentType || 'outbound',
+                                onChange: (e) => updateRecommendation(`logistics.transportSegments[${segmentIndex}].segmentType`, e.target.value)
+                            }, [
+                                React.createElement('option', { key: 'outbound', value: 'outbound' }, 'Outbound'),
+                                React.createElement('option', { key: 'inbound', value: 'inbound' }, 'Inbound'),
+                                React.createElement('option', { key: 'domestic', value: 'domestic' }, 'Domestic'),
+                                React.createElement('option', { key: 'connecting', value: 'connecting' }, 'Connecting')
+                            ])
+                        ])
+                    ]),
+                    
+                    React.createElement('div', { key: 'segment-row3', className: 'form-row' }, [
+                        React.createElement('div', { key: 'booking-group-group', className: 'form-group' }, [
+                            React.createElement('label', { key: 'booking-group-label' }, [
+                                'Booking Group ID ',
+                                React.createElement('span', {
+                                    key: 'booking-group-help',
+                                    style: { fontSize: '12px', color: '#718096' }
+                                }, '(for round-trip bookings)')
+                            ]),
+                            React.createElement('input', {
+                                key: 'booking-group-input',
+                                type: 'text',
+                                value: segment.bookingGroupId || '',
+                                onChange: (e) => updateRecommendation(`logistics.transportSegments[${segmentIndex}].bookingGroupId`, e.target.value || null),
+                                placeholder: 'e.g., round-trip-1 (leave empty for individual booking)'
+                            })
+                        ]),
+                        React.createElement('div', { key: 'display-sequence-group', className: 'form-group' }, [
+                            React.createElement('label', { key: 'display-sequence-label' }, [
+                                'Display Sequence ',
+                                React.createElement('span', {
+                                    key: 'display-sequence-help',
+                                    style: { fontSize: '12px', color: '#718096' }
+                                }, '(travel order)')
+                            ]),
+                            React.createElement('input', {
+                                key: 'display-sequence-input',
+                                type: 'number',
+                                value: segment.displaySequence || '',
+                                onChange: (e) => updateRecommendation(`logistics.transportSegments[${segmentIndex}].displaySequence`, e.target.value ? parseInt(e.target.value) : null),
+                                placeholder: '1, 2, 3...',
+                                min: '1'
+                            })
+                        ])
+                    ]),
+                    
+                    // Visual preview
+                    (segment.fromCity && segment.toCity) ? React.createElement('div', {
+                        key: 'segment-preview',
+                        style: {
+                            background: 'white',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginTop: '15px',
+                            border: '2px solid #e2e8f0',
+                            textAlign: 'center'
+                        }
+                    }, [
+                        React.createElement('div', {
+                            key: 'preview-text',
+                            style: { fontSize: '16px', fontWeight: '600', color: '#2d3748' }
+                        }, `${segment.fromCity} → ${segment.toCity}`),
+                        segment.departureDate ? React.createElement('div', {
+                            key: 'preview-date',
+                            style: { fontSize: '14px', color: '#718096', marginTop: '4px' }
+                        }, (() => {
+                            // Parse date safely to avoid timezone issues
+                            try {
+                                const dateParts = segment.departureDate.split('-');
+                                if (dateParts.length === 3) {
+                                    const year = parseInt(dateParts[0]);
+                                    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+                                    const day = parseInt(dateParts[2]);
+                                    const date = new Date(year, month, day);
+                                    return `Departure: ${date.toLocaleDateString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        year: 'numeric' 
+                                    })}`;
+                                } else {
+                                    return `Departure: ${segment.departureDate}`;
+                                }
+                            } catch (error) {
+                                return `Departure: ${segment.departureDate}`;
+                            }
+                        })()) : null
+                    ]) : null
+                ]),
+
                 React.createElement('div', {
                     key: 'transport-options',
                     style: { marginTop: '20px' }
@@ -112,6 +271,104 @@ window.LogisticsTab = ({
                                 ])
                             ]),
 
+                            // Round-trip and recommendation fields
+                            React.createElement('div', { key: 'option-meta-fields', className: 'form-row', style: { marginBottom: '15px' } }, [
+                                React.createElement('div', { key: 'round-trip-group', className: 'form-group' }, [
+                                    React.createElement('label', {
+                                        key: 'round-trip-label',
+                                        style: { display: 'flex', alignItems: 'center', gap: '8px' }
+                                    }, [
+                                        React.createElement('input', {
+                                            key: 'round-trip-checkbox',
+                                            type: 'checkbox',
+                                            checked: option.isRoundTrip || false,
+                                            onChange: (e) => updateRecommendation(`logistics.transportSegments[${segmentIndex}].transportOptions[${optionIndex}].isRoundTrip`, e.target.checked)
+                                        }),
+                                        'Round-trip booking'
+                                    ])
+                                ]),
+                                React.createElement('div', { key: 'recommended-group', className: 'form-group' }, [
+                                    React.createElement('label', {
+                                        key: 'recommended-label',
+                                        style: { display: 'flex', alignItems: 'center', gap: '8px' }
+                                    }, [
+                                        React.createElement('input', {
+                                            key: 'recommended-checkbox',
+                                            type: 'checkbox',
+                                            checked: option.recommendedSelection || false,
+                                            onChange: (e) => updateRecommendation(`logistics.transportSegments[${segmentIndex}].transportOptions[${optionIndex}].recommendedSelection`, e.target.checked)
+                                        }),
+                                        'Recommended selection'
+                                    ])
+                                ])
+                            ]),
+                            
+                            // Linked segment field for round-trip bookings
+                            option.isRoundTrip ? React.createElement('div', { key: 'linked-segment-field', className: 'form-group', style: { marginBottom: '15px' } }, [
+                                React.createElement('label', { key: 'linked-segment-label' }, [
+                                    'Linked Return Segment ',
+                                    React.createElement('span', {
+                                        key: 'linked-segment-help',
+                                        style: { fontSize: '12px', color: '#718096' }
+                                    }, '(select the return segment for this round-trip)')
+                                ]),
+                                React.createElement('select', {
+                                    key: 'linked-segment-select',
+                                    value: option.linkedSegmentId || '',
+                                    onChange: (e) => updateRecommendation(`logistics.transportSegments[${segmentIndex}].transportOptions[${optionIndex}].linkedSegmentId`, e.target.value || null),
+                                    style: { width: '100%' }
+                                }, [
+                                    React.createElement('option', { key: 'empty', value: '' }, 'Select return segment...'),
+                                    ...transportSegments
+                                        .map((seg, idx) => {
+                                            // Don't show current segment as an option
+                                            if (idx === segmentIndex) return null;
+                                            
+                                            const displayName = seg.fromCity && seg.toCity ? 
+                                                `${seg.fromCity} → ${seg.toCity}` : 
+                                                `Segment ${idx + 1}`;
+                                            const displayDate = seg.departureDate ? 
+                                                (() => {
+                                                    // Parse date safely to avoid timezone issues
+                                                    try {
+                                                        const dateParts = seg.departureDate.split('-');
+                                                        if (dateParts.length === 3) {
+                                                            const year = parseInt(dateParts[0]);
+                                                            const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+                                                            const day = parseInt(dateParts[2]);
+                                                            const date = new Date(year, month, day);
+                                                            return ` (${date.toLocaleDateString('en-US', { 
+                                                                month: 'short', 
+                                                                day: 'numeric' 
+                                                            })})`;
+                                                        } else {
+                                                            return ` (${seg.departureDate})`;
+                                                        }
+                                                    } catch (error) {
+                                                        return ` (${seg.departureDate})`;
+                                                    }
+                                                })() : 
+                                                '';
+                                            
+                                            return React.createElement('option', {
+                                                key: seg.id || idx,
+                                                value: seg.id || `segment-${idx}`
+                                            }, `${displayName}${displayDate}`);
+                                        })
+                                        .filter(Boolean)
+                                ]),
+                                React.createElement('div', {
+                                    key: 'linked-segment-info',
+                                    style: { fontSize: '11px', color: '#718096', marginTop: '4px' }
+                                }, [
+                                    'Selected ID: ',
+                                    React.createElement('code', {
+                                        key: 'segment-id',
+                                        style: { background: '#f1f5f9', padding: '2px 4px', borderRadius: '3px' }
+                                    }, option.linkedSegmentId || 'None')
+                                ])
+                            ]) : null,
+
                             React.createElement(window.TransportOptionForm, {
                                 key: 'option-form',
                                 option: option,
@@ -132,6 +389,25 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
     const [flightSearchResults, setFlightSearchResults] = React.useState([]);
     const [isSearching, setIsSearching] = React.useState(false);
     const [searchError, setSearchError] = React.useState('');
+    
+    // Helper function to format dates for HTML date input
+    const formatDateForInput = (dateValue) => {
+        if (!dateValue) return '';
+        
+        // If already in yyyy-MM-dd format, return as-is
+        if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            return dateValue;
+        }
+        
+        // Parse various date formats and convert to yyyy-MM-dd
+        try {
+            const date = new Date(dateValue);
+            if (isNaN(date.getTime())) return '';
+            return date.toISOString().split('T')[0];
+        } catch (error) {
+            return '';
+        }
+    };
     
     // Helper function to format duration from minutes to "Xh Ym" format
     const formatDuration = (durationInMinutes) => {
@@ -233,8 +509,8 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
                             flightNumber: segment.flight_number,
                             duration: formatDuration(segment.duration),
                             aircraft: segment.airplane || 'N/A',
-                            departureDate: segDepDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                            arrivalDate: segArrDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                            departureDate: segDepDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                            arrivalDate: segArrDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                             hasDateChange: segHasDateChange
                         };
                     });
@@ -256,7 +532,7 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
                                 hour: '2-digit',
                                 minute: '2-digit'
                             }),
-                            date: departureDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            date: departureDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                         },
                         arrival: {
                             airport: lastSegment.arrival_airport.id,
@@ -267,7 +543,7 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
                                 hour: '2-digit',
                                 minute: '2-digit'
                             }),
-                            date: arrivalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            date: arrivalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                         },
                         // Enhanced connection details
                         route: routeDescription,
@@ -304,20 +580,50 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
     
     // Apply selected flight data to form
     const selectFlight = (flight) => {
-        updateRecommendation(`${basePath}.details.details.flightNumber`, flight.flightNumber);
-        updateRecommendation(`${basePath}.details.details.airline`, flight.airline);
+        // Fix path structure - form uses option.details.flightNumber, not option.details.details.flightNumber
+        updateRecommendation(`${basePath}.details.flightNumber`, flight.flightNumber);
+        updateRecommendation(`${basePath}.details.airline`, flight.airline);
         updateRecommendation(`${basePath}.details.details.departure.airportCode`, flight.departure.airport);
         updateRecommendation(`${basePath}.details.details.arrival.airportCode`, flight.arrival.airport);
-        updateRecommendation(`${basePath}.details.details.departure.airport`, flight.departure.airportName);
-        updateRecommendation(`${basePath}.details.details.arrival.airport`, flight.arrival.airportName);
+        updateRecommendation(`${basePath}.details.departureAirportName`, flight.departure.airportName);
+        updateRecommendation(`${basePath}.details.arrivalAirportName`, flight.arrival.airportName);
         updateRecommendation(`${basePath}.details.details.departure.time`, flight.departure.localTime);
         updateRecommendation(`${basePath}.details.details.arrival.time`, flight.arrival.localTime);
-        updateRecommendation(`${basePath}.details.details.departure.date`, flight.departure.date);
-        updateRecommendation(`${basePath}.details.details.arrival.date`, flight.arrival.date);
+        
+        // Fix date format - convert date to proper yyyy-MM-dd format
+        const formatDateForForm = (dateStr) => {
+            if (!dateStr) return '';
+            try {
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return '';
+                return date.toISOString().split('T')[0];
+            } catch (error) {
+                return '';
+            }
+        };
+        
+        // Use the search date for departure date (not the actual flight time which might be different timezone)
+        const searchDate = option.details.details?.departure?.date;
+        if (searchDate) {
+            updateRecommendation(`${basePath}.details.details.departure.date`, searchDate);
+        } else {
+            updateRecommendation(`${basePath}.details.details.departure.date`, formatDateForForm(flight.departure.time));
+        }
+        
+        // For arrival date, calculate based on search date + any day changes
+        const arrivalDate = searchDate && flight.hasDateChange ? 
+            (() => {
+                const depDate = new Date(searchDate);
+                depDate.setDate(depDate.getDate() + 1);
+                return depDate.toISOString().split('T')[0];
+            })() :
+            searchDate || formatDateForForm(flight.arrival.time);
+        
+        updateRecommendation(`${basePath}.details.details.arrival.date`, arrivalDate);
         updateRecommendation(`${basePath}.duration`, flight.totalDuration || flight.duration);
         updateRecommendation(`${basePath}.cost.cashAmount`, flight.price);
         updateRecommendation(`${basePath}.cost.totalCashValue`, flight.price);
-        updateRecommendation(`${basePath}.details.details.aircraft`, flight.aircraft);
+        updateRecommendation(`${basePath}.details.aircraft`, flight.aircraft);
         
         // Store booking information
         if (flight.bookingUrl) {
@@ -340,12 +646,10 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
         updateRecommendation(`${basePath}.details.hasDateChange`, flight.hasDateChange);
         updateRecommendation(`${basePath}.details.hasOvernightLayover`, flight.hasOvernightLayover);
         updateRecommendation(`${basePath}.details.isRedEye`, flight.isRedEye);
-        if (flight.departure.date) {
-            updateRecommendation(`${basePath}.details.departureDate`, flight.departure.date);
-        }
-        if (flight.arrival.date) {
-            updateRecommendation(`${basePath}.details.arrivalDate`, flight.arrival.date);
-        }
+        
+        // Don't overwrite the dates we just set above - these would be the API flight dates
+        // which might be in different timezone or format than what we want
+        // The dates are already set correctly above using the search date
         
         console.log(`Selected flight: ${flight.route || flight.airline + ' ' + flight.flightNumber} (${flight.layovers === 0 ? 'Direct' : flight.layovers + ' stops'})`);
     };
@@ -389,12 +693,24 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
                         ]),
                         React.createElement('div', { key: 'search-row2', className: 'form-row' }, [
                             React.createElement('div', { key: 'date-group', className: 'form-group' }, [
-                                React.createElement('label', { key: 'date-label' }, 'Search Date'),
+                                React.createElement('label', { key: 'date-label' }, [
+                                    'Search Date',
+                                    React.createElement('span', {
+                                        key: 'auto-fill-note',
+                                        style: { 
+                                            fontSize: '11px', 
+                                            color: '#718096', 
+                                            fontWeight: 'normal',
+                                            marginLeft: '8px'
+                                        }
+                                    }, '(auto-filled from segment date, editable)')
+                                ]),
                                 React.createElement('input', {
                                     key: 'date-input',
                                     type: 'date',
-                                    value: option.details.details?.departure?.date || '',
-                                    onChange: (e) => updateRecommendation(`${basePath}.details.details.departure.date`, e.target.value)
+                                    value: formatDateForInput(option.details.details?.departure?.date) || '',
+                                    onChange: (e) => updateRecommendation(`${basePath}.details.details.departure.date`, e.target.value),
+                                    placeholder: 'Search date for flights'
                                 })
                             ]),
                             React.createElement('div', { key: 'search-group', className: 'form-group' }, [
@@ -712,29 +1028,92 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
                         onChange: (e) => updateRecommendation(`${basePath}.details.details.arrival.time`, e.target.value),
                         style: { flex: 1 }
                     }),
-                    option.details.details?.arrival?.date && option.details.details?.departure?.date && 
-                    option.details.details.arrival.date !== option.details.details.departure.date ? 
-                        React.createElement('span', {
-                            key: 'date-change-indicator',
-                            style: {
-                                fontSize: '12px',
-                                color: '#f56565',
-                                fontWeight: '600',
-                                background: '#fed7d7',
-                                padding: '2px 6px',
-                                borderRadius: '4px'
+                    React.createElement('div', {
+                        key: 'date-change-controls',
+                        style: { display: 'flex', alignItems: 'center', gap: '8px' }
+                    }, [
+                        // Manual override checkbox
+                        React.createElement('label', {
+                            key: 'manual-override-label',
+                            style: { 
+                                fontSize: '11px', 
+                                color: '#718096', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '4px',
+                                cursor: 'pointer'
                             }
-                        }, '+1') : null
+                        }, [
+                            React.createElement('input', {
+                                key: 'manual-override-checkbox',
+                                type: 'checkbox',
+                                checked: option.details.details?.showDateChange || false,
+                                onChange: (e) => updateRecommendation(`${basePath}.details.details.showDateChange`, e.target.checked),
+                                style: { margin: 0 }
+                            }),
+                            '+1 day'
+                        ]),
+                        
+                        // Show the +1 indicator based on manual override
+                        option.details.details?.showDateChange ? 
+                            React.createElement('span', {
+                                key: 'date-change-indicator',
+                                style: {
+                                    fontSize: '12px',
+                                    color: '#f56565',
+                                    fontWeight: '600',
+                                    background: '#fed7d7',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px'
+                                }
+                            }, '+1') : null
+                    ])
                 ])
             ])
         ]),
 
         renderDetailsForm(),
 
+        // Round-trip pricing guidance
+        option.isRoundTrip && React.createElement('div', {
+            key: 'round-trip-pricing-guide',
+            style: {
+                background: '#fef3cd',
+                border: '1px solid #fbbf24',
+                borderRadius: '6px',
+                padding: '12px',
+                marginBottom: '15px'
+            }
+        }, [
+            React.createElement('div', {
+                key: 'guide-title',
+                style: { fontWeight: '600', color: '#92400e', marginBottom: '8px', fontSize: '14px' }
+            }, '💡 Round-Trip Pricing Guide'),
+            React.createElement('div', {
+                key: 'guide-text',
+                style: { fontSize: '13px', color: '#92400e', lineHeight: '1.4' }
+            }, [
+                React.createElement('div', { key: 'line1' }, '• Enter the TOTAL round-trip price in this segment'),
+                React.createElement('div', { key: 'line2' }, '• Set the return segment price to $0'),
+                React.createElement('div', { key: 'line3' }, '• This prevents double-counting and matches real bookings')
+            ])
+        ]),
+
         // Cost Structure - iOS FlexibleCost format (cash and points)
         React.createElement('div', { key: 'cost-row1', className: 'form-row' }, [
             React.createElement('div', { key: 'cash-amount-group', className: 'form-group' }, [
-                React.createElement('label', { key: 'cash-amount-label' }, 'Cash Amount'),
+                React.createElement('label', { key: 'cash-amount-label' }, [
+                    'Cash Amount',
+                    option.isRoundTrip && React.createElement('span', {
+                        key: 'round-trip-hint',
+                        style: {
+                            fontSize: '11px',
+                            color: '#f59e0b',
+                            marginLeft: '8px',
+                            fontWeight: '600'
+                        }
+                    }, '(Total round-trip price)')
+                ]),
                 React.createElement('input', {
                     key: 'cash-amount-input',
                     type: 'number',
@@ -744,7 +1123,7 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
                         updateRecommendation(`${basePath}.cost.cashAmount`, amount);
                         updateRecommendation(`${basePath}.cost.totalCashValue`, amount);
                     },
-                    placeholder: '0'
+                    placeholder: option.isRoundTrip ? 'Enter total round-trip price' : '0'
                 })
             ])
         ]),
