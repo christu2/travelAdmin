@@ -36,8 +36,8 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
         return () => unsubscribe();
     }, [currentUser]);
 
-    // Admin access check
-    if (currentUser.email !== 'nchristus93@gmail.com') {
+    // Admin access check using SecurityHelpers
+    if (!window.SecurityHelpers?.isAuthorizedAdmin(currentUser)) {
         return React.createElement('div', { className: 'container' }, [
             React.createElement('div', {
                 key: 'access-denied',
@@ -95,13 +95,16 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
     const saveRecommendation = async () => {
         if (!selectedTrip || !newRecommendation) return;
         
+        // Validate and sanitize data before saving
+        const sanitizedRecommendation = window.SecurityHelpers?.validateTripData?.(newRecommendation) || newRecommendation;
+        
         setSaveStatus('saving');
         try {
             await firebase.firestore()
                 .collection('trips')
                 .doc(selectedTrip.id)
                 .update({
-                    destinationRecommendation: newRecommendation,
+                    destinationRecommendation: sanitizedRecommendation,
                     status: 'completed',
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
@@ -247,7 +250,7 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                 style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
             }, [
                 React.createElement('div', { key: 'title-section' }, [
-                    React.createElement('h1', { key: 'title' }, 'Travel Admin Dashboard'),
+                    React.createElement('h1', { key: 'title' }, 'WanderMint Admin Dashboard'),
                     React.createElement('p', { key: 'subtitle' }, 'Manage multi-city trips with destination-centric recommendations')
                 ]),
                 React.createElement('div', {

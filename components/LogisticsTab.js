@@ -445,7 +445,14 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
             console.log(`Searching flights: ${departureCode} → ${arrivalCode} on ${searchDate}`);
             
             // Use local proxy server to avoid CORS issues
-            const apiUrl = `http://localhost:3003/api/flights/search?departure_id=${departureCode}&arrival_id=${arrivalCode}&outbound_date=${searchDate}&currency=USD&hl=en`;
+            const baseUrl = window.location.protocol === 'https:' ? 'https://your-production-domain.com' : 'http://localhost:3003';
+            const apiUrl = `${baseUrl}/api/flights/search?departure_id=${departureCode}&arrival_id=${arrivalCode}&outbound_date=${searchDate}&currency=USD&hl=en`;
+            
+            // Validate URL for security
+            if (window.SecurityHelpers && !window.SecurityHelpers.validateUrl(apiUrl)) {
+                console.error('Invalid flight search URL:', apiUrl);
+                return;
+            }
             
             const response = await fetch(apiUrl);
             

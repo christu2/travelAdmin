@@ -93,6 +93,12 @@ window.DestinationsTab = ({
             // Use the configured hotel proxy server from start-services.sh
             const hotelProxyUrl = window.HOTEL_PROXY_URL || 'http://localhost:3002';
             
+            // Validate URL for security
+            if (window.SecurityHelpers && !window.SecurityHelpers.validateUrl(hotelProxyUrl)) {
+                console.error('Invalid hotel proxy URL:', hotelProxyUrl);
+                return;
+            }
+            
             // Check if proxy is available (only works locally due to IP restrictions)
             if (!window.HOTEL_PROXY_URL) {
                 alert('TripAdvisor auto-fill is only available when running locally due to API IP restrictions. You can still manually enter hotel details.');

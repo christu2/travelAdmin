@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Travel Admin Dashboard</title>
+    <title>WanderMint Admin Dashboard</title>
     
     <!-- External Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -22,7 +22,8 @@
     <!-- Configure API endpoints -->
     <script>
         // Configure TripAdvisor hotel proxy (from start-services.sh)
-        window.HOTEL_PROXY_URL = 'http://localhost:3002';
+        // Use HTTPS in production, fallback to localhost for development
+        window.HOTEL_PROXY_URL = window.location.protocol === 'https:' ? 'https://your-production-domain.com' : 'http://localhost:3002';
     </script>
 
     <!-- Initialize Firebase -->
@@ -45,6 +46,7 @@
 
     <!-- Utility Scripts -->
     <script src="utils/dataHelpers.js"></script>
+    <script src="utils/securityHelpers.js"></script>
     
     <!-- Component Scripts -->
     <script src="components/UserPointsDisplay.js"></script>
@@ -82,17 +84,26 @@
             
             if (missingComponents.length > 0) {
                 console.error('Missing components:', missingComponents);
-                document.getElementById('root').innerHTML = 
-                    '<div style="padding: 20px; color: red;">Error: Missing components: ' + 
-                    missingComponents.join(', ') + '</div>';
+                // Secure DOM manipulation - use textContent to prevent XSS
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = 'padding: 20px; color: red;';
+                errorDiv.textContent = 'Error: Missing components: ' + missingComponents.join(', ');
+                const root = document.getElementById('root');
+                root.innerHTML = ''; // Clear existing content
+                root.appendChild(errorDiv);
                 return;
             }
             
             // Check if DataHelpers is loaded
             if (!window.DataHelpers) {
                 console.error('DataHelpers not loaded');
-                document.getElementById('root').innerHTML = 
-                    '<div style="padding: 20px; color: red;">Error: DataHelpers not loaded</div>';
+                // Secure DOM manipulation - use textContent to prevent XSS
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = 'padding: 20px; color: red;';
+                errorDiv.textContent = 'Error: DataHelpers not loaded';
+                const root = document.getElementById('root');
+                root.innerHTML = ''; // Clear existing content
+                root.appendChild(errorDiv);
                 return;
             }
             
@@ -104,8 +115,13 @@
                 console.log('🚀 Travel Admin Dashboard loaded successfully');
             } catch (error) {
                 console.error('Error initializing app:', error);
-                document.getElementById('root').innerHTML = 
-                    '<div style="padding: 20px; color: red;">Error initializing app: ' + error.message + '</div>';
+                // Secure DOM manipulation - use textContent to prevent XSS
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = 'padding: 20px; color: red;';
+                errorDiv.textContent = 'Error initializing app: ' + (error.message || 'Unknown error');
+                const root = document.getElementById('root');
+                root.innerHTML = ''; // Clear existing content
+                root.appendChild(errorDiv);
             }
         }
         

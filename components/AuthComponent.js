@@ -46,7 +46,7 @@ window.AuthComponent = () => {
                 className: 'header',
                 style: { textAlign: 'center' }
             }, [
-                React.createElement('h1', { key: 'title' }, 'Travel Admin Dashboard'),
+                React.createElement('h1', { key: 'title' }, 'WanderMint Admin Dashboard'),
                 React.createElement('p', { key: 'subtitle' }, 'Please sign in to access the dashboard'),
                 React.createElement('button', {
                     key: 'signin-btn',
