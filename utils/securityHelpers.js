@@ -111,6 +111,39 @@ window.SecurityHelpers = {
     },
 
     /**
+     * Validate and sanitize recommendation data
+     * @param {Object} recommendationData - Recommendation data to validate
+     * @returns {Object} - Sanitized recommendation data
+     */
+    validateRecommendationData: function(recommendationData) {
+        if (!recommendationData || typeof recommendationData !== 'object') return null;
+        
+        // For recommendation data from trusted sources (like OpenAI API),
+        // we don't need aggressive HTML encoding as it's meant for display
+        // Just do basic validation and remove any script tags
+        const sanitizeForDisplay = (obj) => {
+            if (typeof obj === 'string') {
+                // Remove script tags and other dangerous HTML but preserve quotes/apostrophes
+                return obj.replace(/<script[^>]*>.*?<\/script>/gi, '')
+                          .replace(/<[^>]*>/g, '')
+                          .trim();
+            } else if (Array.isArray(obj)) {
+                return obj.map(item => sanitizeForDisplay(item));
+            } else if (obj && typeof obj === 'object') {
+                const sanitized = {};
+                for (const [key, value] of Object.entries(obj)) {
+                    sanitized[key] = sanitizeForDisplay(value);
+                }
+                return sanitized;
+            } else {
+                return obj;
+            }
+        };
+        
+        return sanitizeForDisplay(recommendationData);
+    },
+
+    /**
      * Generate secure random ID
      * @returns {string} - Random ID string
      */
