@@ -90,8 +90,8 @@ window.DestinationsTab = ({
             // Set the TripAdvisor ID first
             updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorId`, tripAdvisorId);
             
-            // Use the configured hotel proxy server from start-services.sh
-            const hotelProxyUrl = window.HOTEL_PROXY_URL || 'http://localhost:3002';
+            // Use the local hotel proxy server (TripAdvisor API only works locally due to IP restrictions)
+            const hotelProxyUrl = 'http://localhost:3002';
             
             // Validate URL for security
             if (window.SecurityHelpers && !window.SecurityHelpers.validateUrl(hotelProxyUrl)) {
@@ -99,8 +99,8 @@ window.DestinationsTab = ({
                 return;
             }
             
-            // Check if proxy is available (only works locally due to IP restrictions)
-            if (!window.HOTEL_PROXY_URL) {
+            // Check if running locally (TripAdvisor proxy only works locally due to IP restrictions)
+            if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
                 alert('TripAdvisor auto-fill is only available when running locally due to API IP restrictions. You can still manually enter hotel details.');
                 return;
             }
@@ -464,7 +464,7 @@ window.DestinationsTab = ({
                                     React.createElement('input', {
                                         key: 'input',
                                         type: 'number',
-                                        value: option.hotel.pricePerNight,
+                                        value: typeof option.hotel.pricePerNight === 'object' ? '' : (option.hotel.pricePerNight || ''),
                                         onChange: (e) => {
                                             updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.pricePerNight`, parseFloat(e.target.value));
                                             
@@ -483,7 +483,7 @@ window.DestinationsTab = ({
                                     React.createElement('input', {
                                         key: 'input',
                                         type: 'number',
-                                        value: option.hotel.pointsPerNight || 0,
+                                        value: typeof option.hotel.pointsPerNight === 'object' ? '' : (option.hotel.pointsPerNight || ''),
                                         onChange: (e) => updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.pointsPerNight`, parseInt(e.target.value)),
                                         placeholder: 'e.g., 50000'
                                     })
