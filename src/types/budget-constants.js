@@ -1,37 +1,56 @@
 /**
  * Budget and TravelStyle constants for Admin Dashboard
  *
- * IMPORTANT: These values are derived from shared-schemas/
- * They match the TypeScript types in schemas.ts
- *
+ * IMPORTANT: These values are imported from @wandermint/shared-schemas NPM package
  * Single source of truth ensures iOS, Backend, and Admin all use the same values.
  */
 
-// Budget enum values (from budget.schema.json)
-export const BUDGET_OPTIONS = [
-  { value: 'Budget', label: 'Budget', description: 'Budget-conscious accommodations and activities' },
-  { value: 'Comfortable', label: 'Comfortable', description: 'Moderate comfort with good value' },
-  { value: 'Mid-range', label: 'Mid-range', description: 'Mid-range pricing tier' },
-  { value: 'Luxury', label: 'Luxury', description: 'High-end experiences and premium services' },
-  { value: 'Ultra-Luxury', label: 'Ultra-Luxury', description: 'Top-tier luxury accommodations' }
-];
+const { constants } = require('@wandermint/shared-schemas');
 
-// TravelStyle enum values (from travel-style.schema.json)
-export const TRAVEL_STYLE_OPTIONS = [
-  { value: 'Budget', label: 'Budget', description: 'Budget-conscious travel style' },
-  { value: 'Comfortable', label: 'Comfortable', description: 'Moderate comfort with good value' },
-  { value: 'Luxury', label: 'Luxury', description: 'High-end experiences' },
-  { value: 'Adventure', label: 'Adventure', description: 'Active, fast-paced, outdoor/adventure-focused' },
-  { value: 'Relaxation', label: 'Relaxation', description: 'Slow-paced, restful, spa/beach-focused' }
-];
+// Budget enum values (from budget.schema.json via NPM package)
+export const BUDGET_OPTIONS = constants.BUDGET_VALUES.map(value => ({
+  value,
+  label: value,
+  description: getBudgetDescription(value)
+}));
+
+// TravelStyle enum values (from travel-style.schema.json via NPM package)
+export const TRAVEL_STYLE_OPTIONS = constants.TRAVEL_STYLE_VALUES.map(value => ({
+  value,
+  label: value,
+  description: getTravelStyleDescription(value)
+}));
+
+// Helper functions to get descriptions
+function getBudgetDescription(value) {
+  const descriptions = {
+    'Budget': 'Budget-conscious accommodations and activities',
+    'Comfortable': 'Moderate comfort with good value',
+    'Mid-range': 'Mid-range pricing tier',
+    'Luxury': 'High-end experiences and premium services',
+    'Ultra-Luxury': 'Top-tier luxury accommodations'
+  };
+  return descriptions[value] || '';
+}
+
+function getTravelStyleDescription(value) {
+  const descriptions = {
+    'Budget': 'Budget-conscious travel style',
+    'Comfortable': 'Moderate comfort with good value',
+    'Luxury': 'High-end experiences',
+    'Adventure': 'Active, fast-paced, outdoor/adventure-focused',
+    'Relaxation': 'Slow-paced, restful, spa/beach-focused'
+  };
+  return descriptions[value] || '';
+}
 
 // Validation helpers
 export function isValidBudget(value) {
-  return BUDGET_OPTIONS.some(opt => opt.value === value);
+  return constants.BUDGET_VALUES.includes(value);
 }
 
 export function isValidTravelStyle(value) {
-  return TRAVEL_STYLE_OPTIONS.some(opt => opt.value === value);
+  return constants.TRAVEL_STYLE_VALUES.includes(value);
 }
 
 // Important distinctions
@@ -55,7 +74,7 @@ export function validateBudgetValue(value) {
   if (!isValidBudget(value)) {
     return {
       valid: false,
-      error: `"${value}" is not a valid budget option. Use: ${BUDGET_OPTIONS.map(o => o.value).join(', ')}`
+      error: `"${value}" is not a valid budget option. Use: ${constants.BUDGET_VALUES.join(', ')}`
     };
   }
 
@@ -75,7 +94,7 @@ export function validateTravelStyleValue(value) {
   if (!isValidTravelStyle(value)) {
     return {
       valid: false,
-      error: `"${value}" is not a valid travel style. Use: ${TRAVEL_STYLE_OPTIONS.map(o => o.value).join(', ')}`
+      error: `"${value}" is not a valid travel style. Use: ${constants.TRAVEL_STYLE_VALUES.join(', ')}`
     };
   }
 

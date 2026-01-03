@@ -10,15 +10,25 @@
     "dev:hotel": "nodemon hotel-proxy-server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "@wandermint/shared-schemas": "^1.0.0",
     "cors": "^2.8.5",
-    "node-fetch": "^2.7.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "firebase-admin": "^13.4.0",
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["travel", "api", "proxy", "hotel", "serpapi", "admin", "dashboard"],
+  "keywords": [
+    "travel",
+    "api",
+    "proxy",
+    "hotel",
+    "serpapi",
+    "admin",
+    "dashboard"
+  ],
   "author": "Travel Admin",
   "license": "MIT"
 }
