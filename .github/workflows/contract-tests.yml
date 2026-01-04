@@ -1,0 +1,50 @@
+name: Contract Tests
+
+on:
+  pull_request:
+    paths:
+      - 'src/types/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'test/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/types/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'test/**'
+
+jobs:
+  contract-tests:
+    name: Validate Admin Contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run contract tests
+        run: npm run test:contract
+
+      - name: Check shared-schemas version
+        run: |
+          echo "📦 Checking @wandermint/shared-schemas version..."
+          npm list @wandermint/shared-schemas || echo "Package not found in lock file"
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "✅ All contract tests passed!"
+          echo "✅ Admin is compatible with Backend"
+          echo "✅ No breaking schema changes detected"

@@ -137,7 +137,21 @@ window.TripCard = ({ trip, onSelect, onEdit, isSelected = false }) => {
             trip.flexibleDates && React.createElement('div', {
                 key: 'flexible',
                 style: { fontSize: '12px', color: '#48bb78', marginTop: '6px' }
-            }, '✓ Flexible dates')
+            }, '✓ Flexible dates'),
+            trip.specialRequests && React.createElement('div', {
+                key: 'special-requests',
+                style: { 
+                    marginTop: '8px', 
+                    padding: '6px', 
+                    background: '#fff5f5', 
+                    borderRadius: '4px', 
+                    fontSize: '12px',
+                    border: '1px solid #fed7e2' 
+                }
+            }, [
+                React.createElement('strong', null, '📝 Special Requests: '),
+                trip.specialRequests.length > 100 ? trip.specialRequests.substring(0, 100) + '...' : trip.specialRequests
+            ])
         ]),
 
         // Bottom section with status and actions

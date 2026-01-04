@@ -155,7 +155,9 @@ const createEmptyAccommodation = () => ({
     hotel: {
         name: '',
         rating: 4,
-        pricePerNight: createEmptyFlexibleCost(),
+        pricePerNight: 0,
+        pointsPerNight: 0,
+        loyaltyProgram: '',
         totalNights: 1,
         totalCost: createEmptyFlexibleCost(),
         checkIn: '',
@@ -174,7 +176,10 @@ const createEmptyAccommodation = () => ({
             phone: '',
             email: '',
             website: ''
-        }
+        },
+        tripadvisorId: '',
+        tripadvisorUrl: '',
+        detailedDescription: ''
     }
 });
 
@@ -416,6 +421,83 @@ const convertLegacyRecommendation = (legacyRec) => {
     return legacyRec;
 };
 
+// Admin Mirror Management Functions
+const AdminMirrorHelpers = {
+    // Create or update admin mirror record
+    async createOrUpdateMirror(tripData, adminEmail) {
+        const adminUsername = adminEmail.split('@')[0];
+        const mirrorId = `${adminUsername}_${tripData.id}`;
+        
+        const mirrorRef = firebase.firestore().collection('admin_mirrors').doc(mirrorId);
+        
+        const mirrorData = {
+            ...tripData,
+            userEmail: adminEmail,
+            email: adminEmail,
+            _mirrorMetadata: {
+                originalTripId: tripData.id,
+                adminUsername: adminUsername,
+                originalUserEmail: tripData.userEmail || tripData.email,
+                lastSyncedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                purpose: 'ios_app_preview'
+            }
+        };
+        
+        await mirrorRef.set(mirrorData, { merge: true });
+        console.log(`Mirror record created/updated: ${mirrorId}`);
+        return mirrorId;
+    },
+    
+    // Delete admin mirror record
+    async deleteMirror(tripId, adminEmail) {
+        const adminUsername = adminEmail.split('@')[0];
+        const mirrorId = `${adminUsername}_${tripId}`;
+        
+        try {
+            await firebase.firestore().collection('admin_mirrors').doc(mirrorId).delete();
+            console.log(`Mirror record deleted: ${mirrorId}`);
+        } catch (error) {
+            console.error('Error deleting mirror record:', error);
+        }
+    },
+    
+    // Get admin's view of a trip (from mirror)
+    async getAdminViewOfTrip(tripId, adminEmail) {
+        const adminUsername = adminEmail.split('@')[0];
+        const mirrorId = `${adminUsername}_${tripId}`;
+        
+        try {
+            const mirrorDoc = await firebase.firestore().collection('admin_mirrors').doc(mirrorId).get();
+            return mirrorDoc.exists ? mirrorDoc.data() : null;
+        } catch (error) {
+            console.error('Error fetching mirror record:', error);
+            return null;
+        }
+    },
+    
+    // Clean up all mirrors for a deleted trip (call this when deleting trips)
+    async cleanupMirrorsForTrip(tripId) {
+        try {
+            const mirrorsQuery = firebase.firestore()
+                .collection('admin_mirrors')
+                .where('_mirrorMetadata.originalTripId', '==', tripId);
+            
+            const snapshot = await mirrorsQuery.get();
+            
+            if (!snapshot.empty) {
+                const batch = firebase.firestore().batch();
+                snapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                console.log(`Cleaned up ${snapshot.size} mirror records for trip: ${tripId}`);
+            }
+        } catch (error) {
+            console.error('Error cleaning up mirror records:', error);
+        }
+    }
+};
+
 // Export all functions globally for script-based architecture
 window.DataHelpers = {
     generateId,
@@ -439,5 +521,8 @@ window.DataHelpers = {
     createEmptyRecommendation,
     convertLegacyRecommendation
 };
+
+// Export admin mirror helpers
+window.AdminMirrorHelpers = AdminMirrorHelpers;
 
 console.log('✅ DataHelpers utility loaded');

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Trip Comparison</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-firestore-compat.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .trip-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .trip-data { background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #dee2e6; }
+        .differences { background: #fff3cd; padding: 15px; border-radius: 6px; border: 1px solid #ffeaa7; margin-top: 20px; }
+        .error { background: #f8d7da; padding: 15px; border-radius: 6px; border: 1px solid #f5c6cb; color: #721c24; }
+        .success { background: #d4edda; padding: 15px; border-radius: 6px; border: 1px solid #c3e6cb; color: #155724; }
+        pre { white-space: pre-wrap; word-break: break-word; max-height: 400px; overflow-y: auto; background: white; padding: 10px; border-radius: 4px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        .loading { text-align: center; padding: 20px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Firebase Trip Comparison Tool</h1>
+        <p>Compare trips: <code>zfszkeCOJOHRznZj3BiM</code> (working) vs <code>2YCrbxW9LbrgznOXcpZt</code> (problematic)</p>
+        
+        <button onclick="compareTrips()">Compare Trips</button>
+        <button onclick="downloadComparison()">Download JSON Comparison</button>
+        
+        <div id="status"></div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Firebase configuration (same as your admin dashboard)
+        const firebaseConfig = {
+            apiKey: "AIzaSyC4GMsZnSo6zYvBSFIqnWh07PMy0yWTYKM",
+            authDomain: "travel-consulting-app-1.firebaseapp.com",
+            projectId: "travel-consulting-app-1",
+            storageBucket: "travel-consulting-app-1.firebasestorage.app",
+            messagingSenderId: "123591590128",
+            appId: "1:123591590128:ios:ef15580e6e03d5e6160235"
+        };
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+            firebase.firestore().settings({
+                experimentalForceLongPolling: true,
+                experimentalAutoDetectLongPolling: false,
+                merge: true
+            });
+        }
+
+        let tripData = {};
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'loading';
+            statusDiv.innerHTML = `<div class="${className}">${message}</div>`;
+        }
+
+        function findDifferences(obj1, obj2, path = '') {
+            const differences = [];
+            
+            // Check for keys in obj1 but not in obj2
+            Object.keys(obj1 || {}).forEach(key => {
+                const currentPath = path ? `${path}.${key}` : key;
+                if (!(key in (obj2 || {}))) {
+                    differences.push({
+                        type: 'missing_in_second',
+                        path: currentPath,
+                        value: obj1[key]
+                    });
+                } else if (typeof obj1[key] !== typeof obj2[key]) {
+                    differences.push({
+                        type: 'type_mismatch',
+                        path: currentPath,
+                        first: typeof obj1[key],
+                        second: typeof obj2[key],
+                        firstValue: obj1[key],
+                        secondValue: obj2[key]
+                    });
+                } else if (obj1[key] !== null && obj2[key] !== null && typeof obj1[key] === 'object') {
+                    differences.push(...findDifferences(obj1[key], obj2[key], currentPath));
+                } else if (obj1[key] !== obj2[key]) {
+                    differences.push({
+                        type: 'value_difference',
+                        path: currentPath,
+                        first: obj1[key],
+                        second: obj2[key]
+                    });
+                }
+            });
+
+            // Check for keys in obj2 but not in obj1
+            Object.keys(obj2 || {}).forEach(key => {
+                const currentPath = path ? `${path}.${key}` : key;
+                if (!(key in (obj1 || {}))) {
+                    differences.push({
+                        type: 'missing_in_first',
+                        path: currentPath,
+                        value: obj2[key]
+                    });
+                }
+            });
+
+            return differences;
+        }
+
+        async function compareTrips() {
+            showStatus('🔄 Fetching trip data from Firebase...', 'loading');
+            
+            try {
+                const db = firebase.firestore();
+                
+                // Fetch both trips
+                const trip1Promise = db.collection('trips').doc('zfszkeCOJOHRznZj3BiM').get();
+                const trip2Promise = db.collection('trips').doc('2YCrbxW9LbrgznOXcpZt').get();
+                
+                const [trip1Doc, trip2Doc] = await Promise.all([trip1Promise, trip2Promise]);
+                
+                if (!trip1Doc.exists) {
+                    throw new Error('Trip zfszkeCOJOHRznZj3BiM not found');
+                }
+                if (!trip2Doc.exists) {
+                    throw new Error('Trip 2YCrbxW9LbrgznOXcpZt not found');
+                }
+
+                const trip1Data = trip1Doc.data();
+                const trip2Data = trip2Doc.data();
+                
+                tripData = { trip1: trip1Data, trip2: trip2Data };
+                
+                showStatus('✅ Successfully fetched both trips!', 'success');
+                
+                // Find differences
+                const differences = findDifferences(trip1Data, trip2Data);
+                
+                // Display results
+                displayComparison(trip1Data, trip2Data, differences);
+                
+            } catch (error) {
+                console.error('Error fetching trips:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function displayComparison(trip1, trip2, differences) {
+            const resultsDiv = document.getElementById('results');
+            
+            let html = `
+                <div class="trip-comparison">
+                    <div class="trip-data">
+                        <h3>🟢 Working Trip (zfszkeCOJOHRznZj3BiM)</h3>
+                        <pre>${JSON.stringify(trip1, null, 2)}</pre>
+                    </div>
+                    <div class="trip-data">
+                        <h3>🔴 Problematic Trip (2YCrbxW9LbrgznOXcpZt)</h3>
+                        <pre>${JSON.stringify(trip2, null, 2)}</pre>
+                    </div>
+                </div>
+            `;
+
+            if (differences.length > 0) {
+                html += `<div class="differences">
+                    <h3>🚨 Key Differences Found (${differences.length} total)</h3>
+                    <ul>`;
+                
+                differences.forEach(diff => {
+                    switch(diff.type) {
+                        case 'missing_in_second':
+                            html += `<li><strong>Missing in problematic trip:</strong> <code>${diff.path}</code> (value: ${JSON.stringify(diff.value)})</li>`;
+                            break;
+                        case 'missing_in_first':
+                            html += `<li><strong>Extra in problematic trip:</strong> <code>${diff.path}</code> (value: ${JSON.stringify(diff.value)})</li>`;
+                            break;
+                        case 'type_mismatch':
+                            html += `<li><strong>Type mismatch at:</strong> <code>${diff.path}</code> - Working: ${diff.first}, Problematic: ${diff.second}</li>`;
+                            break;
+                        case 'value_difference':
+                            html += `<li><strong>Value difference at:</strong> <code>${diff.path}</code> - Working: ${JSON.stringify(diff.first)}, Problematic: ${JSON.stringify(diff.second)}</li>`;
+                            break;
+                    }
+                });
+                
+                html += `</ul></div>`;
+            } else {
+                html += `<div class="success">✅ No structural differences found!</div>`;
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function downloadComparison() {
+            if (!tripData.trip1 || !tripData.trip2) {
+                alert('Please run the comparison first!');
+                return;
+            }
+
+            const comparison = {
+                working_trip: tripData.trip1,
+                problematic_trip: tripData.trip2,
+                differences: findDifferences(tripData.trip1, tripData.trip2),
+                timestamp: new Date().toISOString()
+            };
+
+            const blob = new Blob([JSON.stringify(comparison, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'trip-comparison.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Auto-run comparison on page load
+        window.onload = () => {
+            setTimeout(compareTrips, 1000);
+        };
+    </script>
+</body>
+</html>

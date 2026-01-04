@@ -5,6 +5,9 @@
  * Integrates with Firebase for real-time trip data
  */
 
+console.log('🔧 Dashboard.js file loaded successfully - TIMESTAMP: ' + Date.now());
+console.log('Current time:', new Date().toISOString());
+
 window.Dashboard = ({ currentUser, onSignOut }) => {
     const [trips, setTrips] = React.useState([]);
     const [selectedTrip, setSelectedTrip] = React.useState(null);
@@ -29,7 +32,16 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                 setTrips(tripsData);
                 setLoading(false);
             }, (error) => {
-                console.error('Error loading trips:', error);
+                console.error('Firestore connection error:', error);
+                console.error('Error code:', error.code);
+                console.error('Error message:', error.message);
+                
+                // Handle specific connection errors
+                if (error.code === 'unavailable' || error.message.includes('QUIC')) {
+                    console.warn('Connection issue detected, attempting to reconnect...');
+                    // The experimentalForceLongPolling setting should handle this
+                }
+                
                 setLoading(false);
             });
 
@@ -66,15 +78,53 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
         setViewMode('edit');
         setIsFullScreenMode(true);
         
+        // DEBUG: Log trip data structure
+        console.log('=== DEBUGGING TRIP DATA ===');
+        console.log('Full trip object:', trip);
+        console.log('trip.destinationRecommendation:', trip.destinationRecommendation);
+        console.log('trip.destinationRecommendation.destinations:', trip.destinationRecommendation?.destinations);
+        console.log('trip.recommendation:', trip.recommendation);
+        console.log('trip.destination:', trip.destination);
+        console.log('trip.destinations:', trip.destinations);
+        
         // Initialize recommendation data
+        let recommendationData;
         if (trip.destinationRecommendation) {
-            setNewRecommendation(trip.destinationRecommendation);
+            recommendationData = trip.destinationRecommendation;
+            console.log('Using destinationRecommendation:', recommendationData);
+            
+            // If destinationRecommendation exists but destinations are empty, populate from trip data
+            if (!recommendationData.destinations || recommendationData.destinations.length === 0) {
+                console.log('destinationRecommendation has empty destinations, populating from trip data...');
+                
+                // Convert trip.destinations (string array) to destination objects
+                if (trip.destinations && trip.destinations.length > 0) {
+                    recommendationData.destinations = trip.destinations.map(dest => ({
+                        name: dest,
+                        accommodations: []
+                    }));
+                    console.log('Populated destinations from trip.destinations:', recommendationData.destinations);
+                } else if (trip.destination) {
+                    recommendationData.destinations = [{
+                        name: trip.destination,
+                        accommodations: []
+                    }];
+                    console.log('Populated destinations from trip.destination:', recommendationData.destinations);
+                }
+            }
         } else if (trip.recommendation) {
             // Convert legacy format if needed
-            setNewRecommendation(window.DataHelpers.convertLegacyRecommendation(trip.recommendation));
+            recommendationData = window.DataHelpers.convertLegacyRecommendation(trip.recommendation);
+            console.log('Using converted recommendation:', recommendationData);
         } else {
-            setNewRecommendation(window.DataHelpers.createEmptyRecommendation(trip));
+            recommendationData = window.DataHelpers.createEmptyRecommendation(trip);
+            console.log('Created empty recommendation:', recommendationData);
         }
+        
+        console.log('Final recommendation destinations:', recommendationData?.destinations);
+        console.log('=== END DEBUGGING ===');
+        
+        setNewRecommendation(recommendationData);
     };
 
     const backToList = () => {
@@ -95,26 +145,83 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
     const saveRecommendation = async () => {
         if (!selectedTrip || !newRecommendation) return;
         
+        // DEBUG: Log save process
+        console.log('=== DEBUGGING SAVE PROCESS ===');
+        console.log('Selected trip ID:', selectedTrip.id);
+        console.log('Original recommendation data:', newRecommendation);
+        
         // Validate and sanitize data before saving
-        const sanitizedRecommendation = window.SecurityHelpers?.validateTripData?.(newRecommendation) || newRecommendation;
+        const sanitizedRecommendation = window.SecurityHelpers?.validateRecommendationData?.(newRecommendation) || newRecommendation;
+        
+        console.log('Sanitized recommendation data:', sanitizedRecommendation);
+        console.log('Data being sent to Firestore:', {
+            destinationRecommendation: sanitizedRecommendation,
+            status: 'completed',
+            updatedAt: 'SERVER_TIMESTAMP'
+        });
         
         setSaveStatus('saving');
         try {
-            await firebase.firestore()
-                .collection('trips')
-                .doc(selectedTrip.id)
-                .update({
-                    destinationRecommendation: sanitizedRecommendation,
-                    status: 'completed',
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+            console.log('Attempting Firestore update...');
+            
+            // Get admin username for mirror record
+            const adminUsername = currentUser.email.split('@')[0];
+            
+            // Create batch for atomic operations
+            const batch = firebase.firestore().batch();
+            
+            // Update original trip record
+            const tripRef = firebase.firestore().collection('trips').doc(selectedTrip.id);
+            batch.update(tripRef, {
+                destinationRecommendation: sanitizedRecommendation,
+                status: 'completed',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // Create/update admin mirror record for iOS app preview
+            const mirrorId = `${adminUsername}_${selectedTrip.id}`;
+            const mirrorRef = firebase.firestore().collection('admin_mirrors').doc(mirrorId);
+            
+            // Copy all trip data to mirror with updated recommendation
+            const mirrorData = {
+                ...selectedTrip,
+                destinationRecommendation: sanitizedRecommendation,
+                status: 'completed',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                _mirrorMetadata: {
+                    originalTripId: selectedTrip.id,
+                    adminUsername: adminUsername,
+                    originalUserEmail: selectedTrip.userEmail || selectedTrip.email || selectedTrip.userId || 'nchristus93@gmail.com',
+                    mirrorCreatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    purpose: 'ios_app_preview'
+                }
+            };
+            
+            // Replace user email with admin email so iOS app shows it under your account
+            mirrorData.userEmail = currentUser.email;
+            mirrorData.email = currentUser.email;
+            
+            batch.set(mirrorRef, mirrorData, { merge: true });
+            
+            await batch.commit();
+            
+            console.log('Firestore update successful!');
+            console.log(`Mirror record created: ${mirrorId}`);
+            console.log('You can now see this trip in your iOS app');
+            
             setSaveStatus('saved');
             setTimeout(() => setSaveStatus(''), 3000);
         } catch (error) {
             console.error('Error saving recommendation:', error);
+            console.error('Error details:', {
+                code: error.code,
+                message: error.message,
+                stack: error.stack
+            });
             setSaveStatus('error');
             setTimeout(() => setSaveStatus(''), 5000);
         }
+        console.log('=== END SAVE DEBUGGING ===');
     };
 
     // Helper functions for managing destinations
@@ -513,6 +620,13 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                         }, [
                             React.createElement('strong', null, 'Notes: '),
                             selectedTrip.additionalNotes
+                        ]),
+                        selectedTrip.specialRequests && React.createElement('div', {
+                            key: 'special-requests',
+                            style: { marginTop: '8px', padding: '8px', background: '#fff5f5', borderRadius: '4px', fontSize: '12px', border: '1px solid #fed7e2' }
+                        }, [
+                            React.createElement('strong', null, 'Special Requests: '),
+                            selectedTrip.specialRequests
                         ])
                     ])
                 ])
@@ -549,7 +663,12 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                     key: 'conversations-tab',
                     className: activeTab === 'conversations' ? 'active' : '',
                     onClick: () => setActiveTab('conversations')
-                }, 'Conversations')
+                }, 'Conversations'),
+                React.createElement('button', {
+                    key: 'comparison-tab',
+                    className: activeTab === 'comparison' ? 'active' : '',
+                    onClick: () => setActiveTab('comparison')
+                }, 'Trip Comparison')
             ]),
 
             // Tab Content
@@ -618,7 +737,13 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                 }) : React.createElement('div', {
                     key: 'conversations-placeholder',
                     style: { padding: '20px', textAlign: 'center', color: '#718096' }
-                }, 'Conversations tab component not loaded yet'))
+                }, 'Conversations tab component not loaded yet')),
+
+            activeTab === 'comparison' && React.createElement(window.TripComparisonTab, {
+                key: 'comparison-content',
+                currentUser: currentUser,
+                selectedTrip: selectedTrip
+            })
         ])
     ]);
 };

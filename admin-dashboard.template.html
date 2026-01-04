@@ -41,6 +41,13 @@
         // Initialize Firebase
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
+            
+            // Configure Firestore to avoid QUIC protocol errors
+            firebase.firestore().settings({
+                experimentalForceLongPolling: true,
+                experimentalAutoDetectLongPolling: false,
+                merge: true
+            });
         }
     </script>
 
@@ -52,15 +59,16 @@
     <script src="components/UserPointsDisplay.js"></script>
     <script src="components/TripCard.js"></script>
     <script src="components/TripDetailView.js"></script>
-    <script src="components/Dashboard.js"></script>
+    <script src="components/Dashboard.js?v={{TIMESTAMP}}"></script>
     <script src="components/AuthComponent.js"></script>
     
     <!-- Tab Component Scripts -->
-    <script src="components/OverviewTab.js"></script>
-    <script src="components/DestinationsTab.js"></script>
-    <script src="components/LogisticsTab.js"></script>
-    <script src="components/ActivitiesTab.js"></script>
-    <script src="components/CostsTab.js"></script>
+    <script src="components/OverviewTab.js?v={{TIMESTAMP}}"></script>
+    <script src="components/DestinationsTab.js?v={{TIMESTAMP}}"></script>
+    <script src="components/LogisticsTab.js?v={{TIMESTAMP}}"></script>
+    <script src="components/ActivitiesTab.js?v={{TIMESTAMP}}"></script>
+    <script src="components/CostsTab.js?v={{TIMESTAMP}}"></script>
+    <script src="components/TripComparisonTab.js?v={{TIMESTAMP}}"></script>
 
     <!-- Initialize App -->
     <script>
@@ -77,7 +85,8 @@
                 'DestinationsTab',
                 'LogisticsTab',
                 'ActivitiesTab',
-                'CostsTab'
+                'CostsTab',
+                'TripComparisonTab'
             ];
             
             const missingComponents = requiredComponents.filter(name => !window[name]);

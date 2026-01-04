@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Existing trips collection rules
+    match /trips/{tripId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Admin mirror collection for iOS app preview
+    match /admin_mirrors/{mirrorId} {
+      // Only allow access if user is authenticated and the mirror belongs to them
+      allow read, write: if request.auth != null 
+        && request.auth.token.email != null
+        && mirrorId == request.auth.token.email.split('@')[0] + '_' + resource.data._mirrorMetadata.originalTripId;
+      
+      // Allow creation if authenticated and mirror ID follows naming convention
+      allow create: if request.auth != null 
+        && request.auth.token.email != null
+        && mirrorId.matches(request.auth.token.email.split('@')[0] + '_.*');
+    }
+    
+    // Other collections (add your existing rules here)
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

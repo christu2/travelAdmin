@@ -7,7 +7,10 @@
     "start": "./start-services.sh",
     "start:hotel": "node hotel-proxy-server.js",
     "dev:serpapi": "nodemon serpapi-proxy-server.js",
-    "dev:hotel": "nodemon hotel-proxy-server.js"
+    "dev:hotel": "nodemon hotel-proxy-server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:contract": "jest test/contract-validation.test.js"
   },
   "dependencies": {
     "@wandermint/shared-schemas": "^1.0.0",
@@ -18,6 +21,7 @@
     "node-fetch": "^2.7.0"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
     "nodemon": "^3.0.1"
   },
   "keywords": [

@@ -8,14 +8,14 @@
 const { constants } = require('@wandermint/shared-schemas');
 
 // Budget enum values (from budget.schema.json via NPM package)
-export const BUDGET_OPTIONS = constants.BUDGET_VALUES.map(value => ({
+const BUDGET_OPTIONS = constants.BUDGET_VALUES.map(value => ({
   value,
   label: value,
   description: getBudgetDescription(value)
 }));
 
 // TravelStyle enum values (from travel-style.schema.json via NPM package)
-export const TRAVEL_STYLE_OPTIONS = constants.TRAVEL_STYLE_VALUES.map(value => ({
+const TRAVEL_STYLE_OPTIONS = constants.TRAVEL_STYLE_VALUES.map(value => ({
   value,
   label: value,
   description: getTravelStyleDescription(value)
@@ -45,23 +45,23 @@ function getTravelStyleDescription(value) {
 }
 
 // Validation helpers
-export function isValidBudget(value) {
+function isValidBudget(value) {
   return constants.BUDGET_VALUES.includes(value);
 }
 
-export function isValidTravelStyle(value) {
+function isValidTravelStyle(value) {
   return constants.TRAVEL_STYLE_VALUES.includes(value);
 }
 
 // Important distinctions
-export const BUDGET_ONLY_VALUES = ['Mid-range', 'Ultra-Luxury'];
-export const TRAVEL_STYLE_ONLY_VALUES = ['Adventure', 'Relaxation'];
-export const SHARED_VALUES = ['Budget', 'Comfortable', 'Luxury'];
+const BUDGET_ONLY_VALUES = ['Mid-range', 'Ultra-Luxury'];
+const TRAVEL_STYLE_ONLY_VALUES = ['Adventure', 'Relaxation'];
+const SHARED_VALUES = ['Budget', 'Comfortable', 'Luxury'];
 
 /**
  * Validate that a value is appropriate for its context
  */
-export function validateBudgetValue(value) {
+function validateBudgetValue(value) {
   if (!value) return { valid: true };
 
   if (TRAVEL_STYLE_ONLY_VALUES.includes(value)) {
@@ -81,7 +81,7 @@ export function validateBudgetValue(value) {
   return { valid: true };
 }
 
-export function validateTravelStyleValue(value) {
+function validateTravelStyleValue(value) {
   if (!value) return { valid: true };
 
   if (BUDGET_ONLY_VALUES.includes(value)) {
@@ -100,3 +100,16 @@ export function validateTravelStyleValue(value) {
 
   return { valid: true };
 }
+
+// Export for CommonJS (Node.js/Jest)
+module.exports = {
+  BUDGET_OPTIONS,
+  TRAVEL_STYLE_OPTIONS,
+  BUDGET_ONLY_VALUES,
+  TRAVEL_STYLE_ONLY_VALUES,
+  SHARED_VALUES,
+  isValidBudget,
+  isValidTravelStyle,
+  validateBudgetValue,
+  validateTravelStyleValue
+};

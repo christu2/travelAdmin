@@ -54,7 +54,9 @@ echo "🔧 Generating destination-based admin dashboard with API keys..."
 
 # Generate minimal modular dashboard (new main dashboard)
 if command -v sed >/dev/null 2>&1; then
+    TIMESTAMP=$(date +%s)
     sed -e "s/{{FIREBASE_API_KEY}}/$FIREBASE_API_KEY/g" \
+        -e "s/{{TIMESTAMP}}/$TIMESTAMP/g" \
         admin-dashboard.template.html > admin-dashboard.html
 else
     echo "⚠️  Warning: sed not available. Please manually replace {{FIREBASE_API_KEY}} in admin-dashboard.html"

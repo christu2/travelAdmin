@@ -29,16 +29,37 @@ window.CostsTab = ({ recommendation, updateRecommendation }) => {
                     
                     if (highestPriorityOption.hotel) {
                         // Calculate dates from destination dates
-                        let nights = highestPriorityOption.hotel.totalNights || 1;
-                        if (dest.checkInDate && dest.checkOutDate) {
+                        let nights = highestPriorityOption.hotel.totalNights || dest.numberOfNights || 1;
+                        if (dest.arrivalDate && dest.departureDate) {
+                            const checkIn = new Date(dest.arrivalDate);
+                            const checkOut = new Date(dest.departureDate);
+                            const timeDiff = checkOut.getTime() - checkIn.getTime();
+                            nights = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
+                        } else if (dest.checkInDate && dest.checkOutDate) {
+                            // Fallback for older data format
                             const checkIn = new Date(dest.checkInDate);
                             const checkOut = new Date(dest.checkOutDate);
                             const timeDiff = checkOut.getTime() - checkIn.getTime();
-                            nights = Math.ceil(timeDiff / (1000 * 3600 * 24));
+                            nights = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
                         }
                         
                         const pricePerNight = highestPriorityOption.hotel.pricePerNight || 0;
                         const pointsPerNight = highestPriorityOption.hotel.pointsPerNight || 0;
+                        
+                        // Debug logging to check calculation
+                        console.log('=== COST CALCULATION DEBUG ===');
+                        console.log('Hotel:', highestPriorityOption.hotel.name);
+                        console.log('Arrival date:', dest.arrivalDate);
+                        console.log('Departure date:', dest.departureDate);
+                        console.log('Check-in (fallback):', dest.checkInDate);
+                        console.log('Check-out (fallback):', dest.checkOutDate);
+                        console.log('numberOfNights from dest:', dest.numberOfNights);
+                        console.log('Calculated nights:', nights);
+                        console.log('Price per night (cash):', pricePerNight);
+                        console.log('Points per night:', pointsPerNight);
+                        console.log('Total cash for this hotel:', pricePerNight * nights);
+                        console.log('Total points for this hotel:', pointsPerNight * nights);
+                        console.log('=== END DEBUG ===');
                         
                         accommodationCash += pricePerNight * nights;
                         accommodationPoints += pointsPerNight * nights;
