@@ -661,6 +661,66 @@ window.TransportOptionForm = ({ option, basePath, updateRecommendation }) => {
         console.log(`Selected flight: ${flight.route || flight.airline + ' ' + flight.flightNumber} (${flight.layovers === 0 ? 'Direct' : flight.layovers + ' stops'})`);
     };
 
+    // Seats.aero Award Flight Search & Auto-Fill
+    const searchSeatsAero = async () => {
+        const departureCode = option.details.details?.departure?.airportCode || '';
+        const arrivalCode = option.details.details?.arrival?.airportCode || '';
+        const searchDate = option.details.details?.departure?.date || '';
+
+        if (!departureCode || !arrivalCode) {
+            setSearchError('Please enter departure and arrival airport codes for Seats.aero search');
+            return;
+        }
+
+        setIsSearching(true);
+        setSearchError('');
+        try {
+            const cloudFunctionUrl = `https://us-central1-travel-consulting-app-1.cloudfunctions.net/seatsAeroProxy?origin=${departureCode}&destination=${arrivalCode}&date=${searchDate}`;
+            const response = await fetch(cloudFunctionUrl);
+            const data = await response.json();
+
+            if (data.success && data.data) {
+                console.log('Seats.aero award search results:', data.data);
+                // Filter / Format results for display
+                const awardResults = data.data.map((item, idx) => ({
+                    id: item.id || `seats-${idx}`,
+                    airline: item.airline,
+                    flightNumber: item.flightNumber,
+                    pointsAmount: item.pointsAmount,
+                    pointsProgram: item.pointsProgram,
+                    taxCashAmount: item.taxCashAmount,
+                    cabinClass: item.cabinClass,
+                    bookingUrl: item.bookingUrl,
+                    departure: { airport: item.origin, localTime: item.departureTime },
+                    arrival: { airport: item.destination, localTime: item.arrivalTime }
+                }));
+                setFlightSearchResults(awardResults);
+            } else {
+                setSearchError('No Seats.aero award availability found for this route');
+            }
+        } catch (error) {
+            console.error('Seats.aero search error:', error);
+            setSearchError(`Seats.aero search failed: ${error.message}`);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    // Auto-fill selected award flight
+    const selectAwardFlight = (award) => {
+        updateRecommendation(`${basePath}.details.flightNumber`, award.flightNumber);
+        updateRecommendation(`${basePath}.details.airline`, award.airline);
+        updateRecommendation(`${basePath}.details.details.departure.airportCode`, award.departure.airport);
+        updateRecommendation(`${basePath}.details.details.arrival.airportCode`, award.arrival.airport);
+        updateRecommendation(`${basePath}.cost.pointsAmount`, award.pointsAmount);
+        updateRecommendation(`${basePath}.cost.pointsProgram`, award.pointsProgram);
+        updateRecommendation(`${basePath}.cost.cashAmount`, award.taxCashAmount);
+        if (award.bookingUrl) {
+            updateRecommendation(`${basePath}.bookingUrl`, award.bookingUrl);
+        }
+        console.log(`✅ Auto-filled award flight from Seats.aero: ${award.airline} (${award.pointsAmount} pts)`);
+    };
+
     const renderDetailsForm = () => {
         switch (transportType) {
             case 'flight':

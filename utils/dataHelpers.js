@@ -319,6 +319,8 @@ const createEmptyRecommendation = (trip) => {
             miscellaneous: 0,
             currency: 'USD'
         },
+        _schemaVersion: '2.0.0',
+        _lastModifiedBy: 'admin_dashboard',
         createdAt: null
     };
 };

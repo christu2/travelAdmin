@@ -81,84 +81,39 @@ window.DestinationsTab = ({
     };
 
 
-    // TripAdvisor auto-fill function
-    const autoFillFromTripAdvisor = async (tripAdvisorId, destIndex, accIndex) => {
+    // Google Places 1-Click Auto-Fill Function (replaces TripAdvisor)
+    const autoFillFromGooglePlaces = async (searchQuery, destIndex, accIndex) => {
+        if (!searchQuery) return;
         try {
-            // Get the destination for date information
-            const destination = destinations[destIndex];
+            console.log(`🔍 Auto-filling place via Google Places API: ${searchQuery}`);
+            const cloudFunctionUrl = 'https://us-central1-travel-consulting-app-1.cloudfunctions.net/googlePlacesProxy';
+            const localFallbackUrl = 'http://localhost:3002/api/hotels/details';
             
-            // Set the TripAdvisor ID first
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorId`, tripAdvisorId);
-            
-            // Use the local hotel proxy server (TripAdvisor API only works locally due to IP restrictions)
-            const hotelProxyUrl = 'http://localhost:3002';
-            
-            // Validate URL for security
-            if (window.SecurityHelpers && !window.SecurityHelpers.validateUrl(hotelProxyUrl)) {
-                console.error('Invalid hotel proxy URL:', hotelProxyUrl);
-                return;
-            }
-            
-            // Check if running locally (TripAdvisor proxy only works locally due to IP restrictions)
-            if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                alert('TripAdvisor auto-fill is only available when running locally due to API IP restrictions. You can still manually enter hotel details.');
-                return;
-            }
-            
-            const response = await fetch(`${hotelProxyUrl}/api/hotels/details/${tripAdvisorId}`);
-                
+            const fetchUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? `${localFallbackUrl}/${encodeURIComponent(searchQuery)}`
+                : `${cloudFunctionUrl}?query=${encodeURIComponent(searchQuery)}`;
+
+            const response = await fetch(fetchUrl);
             if (response.ok) {
                 const data = await response.json();
-                
-                if (data.success && data.hotel) {
-                    const hotel = data.hotel;
-                    
-                    // Auto-fill hotel details from TripAdvisor proxy data
-                    if (hotel.name) {
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, hotel.name);
-                    }
-                    if (hotel.rating) {
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.rating`, parseFloat(hotel.rating));
-                    }
-                    if (hotel.address) {
-                        // Ensure address is a string, not an object
-                        const addressStr = typeof hotel.address === 'string' ? hotel.address : 
-                                         (hotel.address && hotel.address.formatted_address) || 
-                                         'Address not available';
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.location`, addressStr);
-                    }
-                    if (hotel.description) {
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.detailedDescription`, hotel.description);
-                    }
-                    // Set TripAdvisor URL directly from API
-                    if (hotel.tripadvisorUrl) {
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, hotel.tripadvisorUrl);
-                    }
-                    
-                    console.log('✅ Auto-filled hotel details from TripAdvisor:', hotel.name);
+                const place = data.place || (data.results && data.results[0]);
+                if (place) {
+                    if (place.name) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, place.name);
+                    if (place.rating) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.rating`, parseFloat(place.rating));
+                    if (place.address) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.location`, place.address);
+                    if (place.description) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.detailedDescription`, place.description);
+                    if (place.mapsUrl) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, place.mapsUrl);
+                    console.log('✅ Auto-filled hotel details from Google Places:', place.name);
                     return;
                 }
             }
-            
-            // Fallback: Use TripAdvisor ID for manual lookup
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, `Hotel from TripAdvisor ID: ${tripAdvisorId}`);
-            
-            // Create fallback TripAdvisor URL
-            let fallbackTripAdvisorUrl = `https://www.tripadvisor.com/Hotel_Review-d${tripAdvisorId}.html`;
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, fallbackTripAdvisorUrl);
-            
-            console.log('ℹ️ TripAdvisor API not available via hotel proxy. Using manual lookup.');
-            console.log('📋 TripAdvisor ID stored:', tripAdvisorId);
-            
+
+            // Fallback manual populate
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, searchQuery);
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchQuery)}`);
         } catch (error) {
-            // Fallback: Just set the ID and basic info
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, `Hotel from TripAdvisor ID: ${tripAdvisorId}`);
-            
-            // Create error fallback TripAdvisor URL
-            let errorFallbackTripAdvisorUrl = `https://www.tripadvisor.com/Hotel_Review-d${tripAdvisorId}.html`;
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, errorFallbackTripAdvisorUrl);
-            
-            console.log('ℹ️ TripAdvisor API error, using manual lookup:', error.message);
+            console.error('Google Places auto-fill error:', error);
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, searchQuery);
         }
     };
     

@@ -150,8 +150,28 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
         console.log('Selected trip ID:', selectedTrip.id);
         console.log('Original recommendation data:', newRecommendation);
         
+        // Add schema version and metadata
+        const recommendationWithMetadata = {
+            ...newRecommendation,
+            _schemaVersion: '2.0.0',
+            _lastModifiedBy: 'admin_dashboard'
+        };
+        
+        // Schema validation before save
+        if (window.SchemaValidator?.validateRecommendation) {
+            const validation = window.SchemaValidator.validateRecommendation(recommendationWithMetadata);
+            if (!validation.valid) {
+                console.error('Schema validation failed:', validation.errors);
+                alert('Schema validation failed:\n' + validation.errors.map(e => `${e.field}: ${e.message}`).join('\n'));
+                setSaveStatus('error');
+                setTimeout(() => setSaveStatus(''), 5000);
+                return;
+            }
+            console.log('Schema validation passed');
+        }
+        
         // Validate and sanitize data before saving
-        const sanitizedRecommendation = window.SecurityHelpers?.validateRecommendationData?.(newRecommendation) || newRecommendation;
+        const sanitizedRecommendation = window.SecurityHelpers?.validateRecommendationData?.(recommendationWithMetadata) || recommendationWithMetadata;
         
         console.log('Sanitized recommendation data:', sanitizedRecommendation);
         console.log('Data being sent to Firestore:', {

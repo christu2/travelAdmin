@@ -12,6 +12,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-auth-compat.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-firestore-compat.min.js"></script>
+
+    <!-- Sentry for error logging (optional - requires SENTRY_DSN in .env) -->
+    <script src="https://browser.sentry-cdn.com/7.91.0/bundle.min.js" crossorigin="anonymous"></script>
     
     <!-- Styles -->
     <link rel="stylesheet" href="styles/dashboard.css">
@@ -54,10 +57,19 @@
     <!-- Utility Scripts -->
     <script src="utils/dataHelpers.js"></script>
     <script src="utils/securityHelpers.js"></script>
+    <script src="utils/schemaValidator.js"></script>
+
+    <!-- Phase 1 Utility Scripts -->
+    <script src="utils/autoSave.js"></script>
+    <script src="utils/keyboardShortcuts.js"></script>
+    <script src="utils/tripSearch.js"></script>
+    <script src="utils/quickReplies.js"></script>
+    <script src="utils/errorLogging.js"></script>
     
     <!-- Component Scripts -->
     <script src="components/UserPointsDisplay.js"></script>
     <script src="components/TripCard.js"></script>
+    <script src="components/TripSearchFilter.js"></script>
     <script src="components/TripDetailView.js"></script>
     <script src="components/Dashboard.js?v={{TIMESTAMP}}"></script>
     <script src="components/AuthComponent.js"></script>
