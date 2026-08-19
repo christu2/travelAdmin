@@ -17,6 +17,7 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
     const [saveStatus, setSaveStatus] = React.useState('');
     const [loading, setLoading] = React.useState(true);
     const [viewMode, setViewMode] = React.useState('list'); // 'list', 'detail', 'edit'
+    const [isGeneratingAi, setIsGeneratingAi] = React.useState(false);
 
     // Load trips from Firebase
     React.useEffect(() => {
@@ -140,6 +141,35 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
         const updated = { ...newRecommendation };
         window.DataHelpers.setNestedProperty(updated, path, value);
         setNewRecommendation(updated);
+    };
+
+    const handleGenerateAiDraft = async () => {
+        if (!selectedTrip || isGeneratingAi) return;
+        setIsGeneratingAi(true);
+
+        try {
+            const hotelProxyUrl = window.HOTEL_PROXY_URL || 'http://localhost:3002';
+            const response = await fetch(`${hotelProxyUrl}/api/ai/generate-recommendation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tripData: selectedTrip
+                })
+            });
+
+            const data = await response.json();
+            if (data.success && data.recommendation) {
+                setNewRecommendation(data.recommendation);
+                alert('✨ AI Preliminary Recommendation generated! You can review and edit each tab.');
+            } else {
+                alert(`⚠️ AI Generation Notice: ${data.reply || data.error || 'Failed to generate'}`);
+            }
+        } catch (err) {
+            console.error('AI Draft generation error:', err);
+            alert(`⚠️ Could not connect to AI service: ${err.message}. Ensure hotel proxy is running on port 3002.`);
+        } finally {
+            setIsGeneratingAi(false);
+        }
     };
 
     const saveRecommendation = async () => {
@@ -454,10 +484,17 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                         style: { color: '#e53e3e' }
                     }, '✗ Error saving'),
                     React.createElement('button', {
+                        key: 'ai-draft-btn',
+                        className: 'btn btn-secondary',
+                        style: { background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', color: 'white', border: 'none' },
+                        onClick: handleGenerateAiDraft,
+                        disabled: isGeneratingAi || saveStatus === 'saving'
+                    }, isGeneratingAi ? '🤖 Generating AI Draft...' : '✨ Generate AI Draft'),
+                    React.createElement('button', {
                         key: 'save-btn',
                         className: 'btn btn-primary',
                         onClick: saveRecommendation,
-                        disabled: saveStatus === 'saving'
+                        disabled: saveStatus === 'saving' || isGeneratingAi
                     }, 'Save Recommendation')
                 ])
             ]),
@@ -743,6 +780,15 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                 key: 'comparison-content',
                 currentUser: currentUser,
                 selectedTrip: selectedTrip
+            }),
+
+            // Floating AI Copilot Panel
+            window.CopilotPanel && React.createElement(window.CopilotPanel, {
+                key: 'copilot-panel',
+                selectedTrip: selectedTrip,
+                newRecommendation: newRecommendation,
+                setNewRecommendation: setNewRecommendation,
+                updateRecommendation: updateRecommendation
             })
         ])
     ]);

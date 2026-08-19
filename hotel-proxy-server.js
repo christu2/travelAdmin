@@ -18,6 +18,10 @@ const TRIPADVISOR_BASE_URL = 'https://api.content.tripadvisor.com/api/v1';
 const FOURSQUARE_API_KEY = process.env.FOURSQUARE_API_KEY;
 const FOURSQUARE_BASE_URL = 'https://api.foursquare.com/v3/places';
 
+// Gemini AI API configuration
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
 // Hotel chain direct booking URL generators
 const generateDirectBookingUrl = (hotelChain, hotelName, checkIn, checkOut, guests = 2) => {
     const formatDate = (dateStr) => {
@@ -496,6 +500,197 @@ const generateMockHotelData = (location, checkIn, checkOut, guests) => {
 
     return mockHotels;
 };
+
+// ==========================================
+// 🤖 AI Copilot & Itinerary Generation Routes
+// ==========================================
+
+// AI Copilot Chat Endpoint for interactive dashboard dictation and assistance
+app.post('/api/copilot/chat', async (req, res) => {
+    try {
+        const { message, history = [], tripContext = {}, currentRecommendation = null } = req.body;
+        const apiKey = req.body.apiKey || GEMINI_API_KEY;
+
+        if (!apiKey) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'GEMINI_API_KEY is not configured', 
+                reply: 'To use the AI Copilot, please configure your GEMINI_API_KEY in the travelAdmin/.env file.' 
+            });
+        }
+
+        if (!message) {
+            return res.status(400).json({ success: false, error: 'Message is required' });
+        }
+
+        const systemInstruction = `
+You are the WanderMint AI Travel Consulting Copilot. You work directly with human boutique and luxury travel consultants to formulate recommendations, optimize flights/points, select TripAdvisor 4.5+ stays, and update the dashboard in real-time.
+
+Core Planning Methodology:
+1. AIRPORT LOGISTICS & FLIGHT HUBS:
+   - Identify the most strategic gateway airports (e.g. fly into PWM vs BGR vs BOS).
+   - Evaluate circular loop vs open-jaw (multi-city) routes to minimize redundant driving.
+   - Cross-reference points & miles (Chase UR, Amex MR, Capital One, Airline miles, Hotel points) vs cash pricing.
+2. DESTINATION PACING:
+   - Divide trips into 2-4 base areas.
+   - Avoid hyper-touristy traps; emphasize charming, authentic local bases with strong character.
+3. ACCOMMODATION CURATION:
+   - Prioritize TripAdvisor 4.5+ hotels, luxury glamping / safari tents, boutique inns, and historic lodges.
+   - Provide 2 accommodation options per destination (Priority 1 and Priority 2).
+4. ACTIVITIES & DINING:
+   - Strictly honor negative constraints (e.g. client prone to sea sickness -> NEVER suggest boat trips).
+   - Highlight local craft breweries, fresh seafood shacks, scenic hiking trails, and historical walks.
+
+Current Trip Intake Context:
+${JSON.stringify(tripContext, null, 2)}
+
+Current Recommendation State in Dashboard:
+${JSON.stringify(currentRecommendation, null, 2)}
+
+Instructions:
+1. "reply": A natural, professional, insightful conversational response explaining what you did, your recommendations, or answering questions.
+2. "updatedRecommendation": (Optional) If the user asked you to generate, modify, add, or update any part of the recommendation (destinations, hotels, dates, activities, restaurants, flights, overview, notes), provide the FULL updated recommendation JSON conforming to WanderMint schema. If no data change was requested, omit this field or set it to null.
+3. "actionSummary": (Optional) A brief 1-line tag describing what was updated (e.g. "Updated Bar Harbor hotel options" or "Added brewery trail to Portland activities").
+
+Always output valid JSON with keys: "reply", "updatedRecommendation" (optional), "actionSummary" (optional).
+`;
+
+        const contents = [];
+        
+        if (Array.isArray(history)) {
+            history.slice(-8).forEach(h => {
+                if (h.role && h.text) {
+                    contents.push({
+                        role: h.role === 'user' ? 'user' : 'model',
+                        parts: [{ text: h.text }]
+                    });
+                }
+            });
+        }
+
+        contents.push({
+            role: 'user',
+            parts: [{ text: message }]
+        });
+
+        const url = `${GEMINI_BASE_URL}/gemini-3.6-flash:generateContent?key=${apiKey}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                contents,
+                generationConfig: {
+                    temperature: 0.4,
+                    topP: 0.95,
+                    responseMimeType: 'application/json'
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini API returned ${response.status}: ${errText}`);
+        }
+
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        let parsed;
+        try {
+            parsed = JSON.parse(rawText);
+        } catch (e) {
+            parsed = { reply: rawText };
+        }
+
+        res.json({
+            success: true,
+            reply: parsed.reply || 'Changes processed.',
+            updatedRecommendation: parsed.updatedRecommendation || null,
+            actionSummary: parsed.actionSummary || null
+        });
+
+    } catch (error) {
+        console.error('[Copilot Chat Error]', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            reply: `Sorry, I encountered an error: ${error.message}`
+        });
+    }
+});
+
+// AI Preliminary Dossier & Recommendation Generation Endpoint
+app.post('/api/ai/generate-recommendation', async (req, res) => {
+    try {
+        const { tripData, pointsData = {} } = req.body;
+        const apiKey = req.body.apiKey || GEMINI_API_KEY;
+
+        if (!apiKey) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'GEMINI_API_KEY is not configured',
+                reply: 'Please configure GEMINI_API_KEY in travelAdmin/.env to generate AI itineraries.'
+            });
+        }
+
+        if (!tripData) {
+            return res.status(400).json({ success: false, error: 'tripData is required' });
+        }
+
+        const systemInstruction = `
+You are the WanderMint AI Preliminary Itinerary Engine.
+Generate a comprehensive preliminary itinerary recommendation conforming to WanderMint schema and an executive planning dossier.
+Methodology:
+- Strategic airport hubs & logistics analysis (e.g. gateway comparison, loop vs open-jaw)
+- Points vs cash optimization
+- Regional pacing & destination splits (avoiding tourist traps, authentic local base)
+- TripAdvisor 4.5+ vetted hotels and boutique/glamping picks
+- Curated dining (brewery trails, local seafood) and activities (nature walks, history) adhering strictly to negative constraints (no boats, etc.).
+
+Output format: JSON with "executiveDossier" and "recommendation".
+`;
+
+        const prompt = `Generate a preliminary itinerary recommendation and executive dossier for:
+Trip Details: ${JSON.stringify(tripData, null, 2)}
+Points & Loyalty: ${JSON.stringify(pointsData, null, 2)}`;
+
+        const url = `${GEMINI_BASE_URL}/gemini-3.6-flash:generateContent?key=${apiKey}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.4,
+                    responseMimeType: 'application/json'
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini API error (${response.status}): ${errText}`);
+        }
+
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const parsed = JSON.parse(rawText);
+
+        res.json({
+            success: true,
+            dossier: parsed.executiveDossier,
+            recommendation: parsed.recommendation
+        });
+
+    } catch (error) {
+        console.error('[AI Generate Error]', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 // Error handling middleware
 app.use((error, req, res, next) => {
