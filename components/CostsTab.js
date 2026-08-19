@@ -61,11 +61,11 @@ window.CostsTab = ({ recommendation, updateRecommendation }) => {
                         console.log('Total points for this hotel:', pointsPerNight * nights);
                         console.log('=== END DEBUG ===');
                         
-                        accommodationCash += pricePerNight * nights;
-                        accommodationPoints += pointsPerNight * nights;
-                        
-                        // Also include any existing totalCost if present (backward compatibility)
-                        if (highestPriorityOption.hotel.totalCost) {
+                        if (pricePerNight > 0 || pointsPerNight > 0) {
+                            accommodationCash += pricePerNight * nights;
+                            accommodationPoints += pointsPerNight * nights;
+                        } else if (highestPriorityOption.hotel.totalCost) {
+                            // Fallback if pricePerNight was not set but totalCost exists
                             accommodationCash += highestPriorityOption.hotel.totalCost.cashAmount || 0;
                             accommodationPoints += highestPriorityOption.hotel.totalCost.pointsAmount || 0;
                         }
