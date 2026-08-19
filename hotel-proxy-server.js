@@ -573,7 +573,7 @@ Always output valid JSON with keys: "reply", "updatedRecommendation" (optional),
             parts: [{ text: message }]
         });
 
-        const url = `${GEMINI_BASE_URL}/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const url = `${GEMINI_BASE_URL}/gemini-3.6-flash:generateContent?key=${apiKey}`;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -656,7 +656,7 @@ Output format: JSON with "executiveDossier" and "recommendation".
 Trip Details: ${JSON.stringify(tripData, null, 2)}
 Points & Loyalty: ${JSON.stringify(pointsData, null, 2)}`;
 
-        const url = `${GEMINI_BASE_URL}/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const url = `${GEMINI_BASE_URL}/gemini-3.6-flash:generateContent?key=${apiKey}`;
 
         const response = await fetch(url, {
             method: 'POST',
