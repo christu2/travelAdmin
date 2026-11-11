@@ -90,36 +90,17 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
         
         // Initialize recommendation data
         let recommendationData;
-        if (trip.destinationRecommendation) {
-            recommendationData = trip.destinationRecommendation;
+        if (trip.destinationRecommendation && trip.destinationRecommendation.destinations && trip.destinationRecommendation.destinations.length > 0) {
+            recommendationData = window.DataHelpers.normalizeAndCalculateRecommendation
+                ? window.DataHelpers.normalizeAndCalculateRecommendation(trip.destinationRecommendation)
+                : trip.destinationRecommendation;
             console.log('Using destinationRecommendation:', recommendationData);
-            
-            // If destinationRecommendation exists but destinations are empty, populate from trip data
-            if (!recommendationData.destinations || recommendationData.destinations.length === 0) {
-                console.log('destinationRecommendation has empty destinations, populating from trip data...');
-                
-                // Convert trip.destinations (string array) to destination objects
-                if (trip.destinations && trip.destinations.length > 0) {
-                    recommendationData.destinations = trip.destinations.map(dest => ({
-                        name: dest,
-                        accommodations: []
-                    }));
-                    console.log('Populated destinations from trip.destinations:', recommendationData.destinations);
-                } else if (trip.destination) {
-                    recommendationData.destinations = [{
-                        name: trip.destination,
-                        accommodations: []
-                    }];
-                    console.log('Populated destinations from trip.destination:', recommendationData.destinations);
-                }
-            }
         } else if (trip.recommendation) {
-            // Convert legacy format if needed
             recommendationData = window.DataHelpers.convertLegacyRecommendation(trip.recommendation);
             console.log('Using converted recommendation:', recommendationData);
         } else {
             recommendationData = window.DataHelpers.createEmptyRecommendation(trip);
-            console.log('Created empty recommendation:', recommendationData);
+            console.log('Created clean empty recommendation canvas:', recommendationData);
         }
         
         console.log('Final recommendation destinations:', recommendationData?.destinations);
@@ -486,10 +467,10 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                     React.createElement('button', {
                         key: 'ai-draft-btn',
                         className: 'btn btn-secondary',
-                        style: { background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', color: 'white', border: 'none' },
-                        onClick: handleGenerateAiDraft,
-                        disabled: isGeneratingAi || saveStatus === 'saving'
-                    }, isGeneratingAi ? '🤖 Generating AI Draft...' : '✨ Generate AI Draft'),
+                        style: { background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', color: 'white', border: 'none' },
+                        onClick: () => window.dispatchEvent(new CustomEvent('open-wandermint-copilot')),
+                        disabled: saveStatus === 'saving'
+                    }, '🎙️ Dictate to AI Copilot'),
                     React.createElement('button', {
                         key: 'save-btn',
                         className: 'btn btn-primary',

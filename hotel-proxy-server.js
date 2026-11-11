@@ -20,7 +20,9 @@ const FOURSQUARE_BASE_URL = 'https://api.foursquare.com/v3/places';
 
 // Gemini AI API configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
 // Hotel chain direct booking URL generators
 const generateDirectBookingUrl = (hotelChain, hotelName, checkIn, checkOut, guests = 2) => {
@@ -502,8 +504,240 @@ const generateMockHotelData = (location, checkIn, checkOut, guests) => {
 };
 
 // ==========================================
-// 🤖 AI Copilot & Itinerary Generation Routes
+// 📍 Google Places Enrichment Proxy
 // ==========================================
+app.get('/api/places/enrich', async (req, res) => {
+    try {
+        const query = req.query.query;
+        if (!query) {
+            return res.status(400).json({ error: 'Missing query parameter' });
+        }
+
+        if (GOOGLE_PLACES_API_KEY) {
+            const fieldMask = [
+                'places.id',
+                'places.displayName',
+                'places.formattedAddress',
+                'places.rating',
+                'places.userRatingCount',
+                'places.websiteUri',
+                'places.googleMapsUri',
+                'places.editorialSummary',
+                'places.photos',
+                'places.priceLevel',
+                'places.nationalPhoneNumber'
+            ].join(',');
+
+            const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+                    'X-Goog-FieldMask': fieldMask
+                },
+                body: JSON.stringify({
+                    textQuery: query,
+                    languageCode: 'en'
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const places = (data.places || []).map(place => {
+                    let photoUrl = '';
+                    if (place.photos && place.photos.length > 0) {
+                        const photoName = place.photos[0].name;
+                        photoUrl = `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=800&maxWidthPx=800&key=${GOOGLE_PLACES_API_KEY}`;
+                    }
+                    return {
+                        id: place.id,
+                        name: place.displayName?.text || '',
+                        location: place.formattedAddress || '',
+                        rating: place.rating || null,
+                        numReviews: place.userRatingCount || 0,
+                        bookingUrl: place.websiteUri || place.googleMapsUri || '',
+                        googleMapsUrl: place.googleMapsUri || '',
+                        description: place.editorialSummary?.text || '',
+                        photoUrl,
+                        phone: place.nationalPhoneNumber || '',
+                        priceLevel: place.priceLevel || null
+                    };
+                });
+                return res.json({ status: 'success', data: places });
+            }
+        }
+
+        // Fallback to local hotel search helper if GOOGLE_PLACES_API_KEY is not set
+        const fallbackHotels = await searchHotelsWithFoursquare(query) || generateMockHotels(query);
+        const mapped = (fallbackHotels || []).map(h => ({
+            id: h.location_id || `place_${Date.now()}`,
+            name: h.name || query,
+            location: h.address_obj?.address_string || query,
+            rating: h.rating ? parseFloat(h.rating) : 4.5,
+            numReviews: h.num_reviews ? parseInt(h.num_reviews, 10) : 120,
+            bookingUrl: h.web_url || '',
+            googleMapsUrl: '',
+            description: h.description || '',
+            photoUrl: h.photo_url || '',
+            phone: h.phone || ''
+        }));
+        res.json({ status: 'success', data: mapped });
+    } catch (error) {
+        console.error('[Places Enrich Error]', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ==========================================
+// 🤖 AI Copilot & Dictation Extraction Routes
+// ==========================================
+
+const ADMIN_RECOMMENDATION_SCHEMA_GUIDE = `
+CRITICAL: Whenever you return "updatedRecommendation", it MUST conform strictly to the WanderMint AdminDestinationBasedRecommendation schema consumed by the iOS app and travelAdmin dashboard:
+
+{
+  "tripOverview": "High-level executive overview of the itinerary and why it fits the traveler",
+  "costNotes": "Step-by-step points transfer strategy and booking notes (e.g., 'Transfer 100k Chase UR to Air France/KLM Flying Blue (instant) for outbound biz class; transfer 135k Chase UR to World of Hyatt for 3 nights at Park Hyatt Paris')",
+  "destinations": [
+    {
+      "id": "dest_1",
+      "cityName": "Paris, France",
+      "arrivalDate": "YYYY-MM-DD",
+      "departureDate": "YYYY-MM-DD",
+      "numberOfNights": 3,
+      "overview": "Neighborhood and pacing overview for this stop",
+      "recommendedOption": 1,
+      "accommodationOptions": [
+        {
+          "id": "acc_1",
+          "priority": 1,
+          "bookingInstructions": "Transfer 45,000 Chase Ultimate Rewards per night to World of Hyatt and book standard suite/king room via hyatt.com",
+          "selectedForBooking": false,
+          "notes": "Why you picked this hotel",
+          "hotel": {
+            "id": "hotel_1",
+            "name": "Park Hyatt Paris-Vendôme",
+            "rating": 4.8,
+            "pricePerNight": 1100,
+            "pointsPerNight": 45000,
+            "loyaltyProgram": "World of Hyatt",
+            "location": "5 Rue de la Paix, 75002 Paris, France",
+            "bookingUrl": "https://www.hyatt.com/...",
+            "bookingInstructions": "Transfer 45,000 Chase UR/night to Hyatt",
+            "detailedDescription": "2-3 sentence rich description of property, vibe, and location.",
+            "whyRecommended": "Unbeatable value on Hyatt points in central Place Vendôme.",
+            "photoUrl": "",
+            "tripadvisorUrl": "",
+            "amenities": ["Spa", "Concierge", "Fitness Center"],
+            "cancellationPolicy": "Free cancellation up to 48h prior",
+            "contactInfo": "+33 1 58 71 12 34"
+          }
+        }
+      ],
+      "recommendedActivities": [
+        {
+          "id": "act_1",
+          "name": "Louvre Evening Tour",
+          "description": "Guided small-group evening tour when crowds thin out.",
+          "category": "Culture",
+          "duration": "3 hours",
+          "estimatedCost": 85,
+          "priority": 1,
+          "bestTimeToVisit": "Wednesday or Friday evening",
+          "location": "Rue de Rivoli, 75001 Paris",
+          "bookingRequired": true,
+          "bookingUrl": "https://www.louvre.fr/en",
+          "bookingInstructions": "Book timed-entry tickets at least 3 weeks in advance",
+          "tips": "Enter via the Carrousel du Louvre underground entrance to skip the Pyramid line."
+        }
+      ],
+      "recommendedRestaurants": [
+        {
+          "id": "rest_1",
+          "name": "Le Comptoir du Relais",
+          "cuisine": "French Bistro",
+          "description": "Classic Saint-Germain bistro by Yves Camdeborde.",
+          "priceRange": "$$$",
+          "estimatedCost": 75,
+          "mealType": "Dinner",
+          "priority": 1,
+          "location": "9 Carrefour de l'Odéon, 75006 Paris",
+          "reservationRequired": true,
+          "reservationUrl": "",
+          "reservationInstructions": "Walk-ins for lunch terrace; book 2 weeks ahead for dinner",
+          "specialties": ["Duck Confit", "Terrine de Campagne"],
+          "tips": "Arrive by 12:00 PM for lunch seating."
+        }
+      ]
+    }
+  ],
+  "logistics": {
+    "generalInstructions": "Overall transit & points transfer reminders",
+    "recommendedBookingOrder": ["Book award flights first while space is open", "Transfer points to hotel partners and reserve stays"],
+    "transportSegments": [
+      {
+        "id": "segment_1",
+        "fromCity": "New York (JFK)",
+        "toCity": "Paris (CDG)",
+        "departureDate": "YYYY-MM-DD",
+        "segmentType": "outbound",
+        "selectedOption": 1,
+        "transportOptions": [
+          {
+            "id": "option_1",
+            "transportType": "flight",
+            "priority": 1,
+            "duration": "7h 15m",
+            "bookingUrl": "https://www.airfrance.us",
+            "notes": "Transfer 50,000 Chase UR / Amex MR per person to Air France/KLM Flying Blue. Taxes $210.",
+            "isRoundTrip": false,
+            "returnLegFor": "",
+            "cost": {
+              "paymentType": "points",
+              "cashAmount": 210,
+              "totalCashValue": 210,
+              "pointsAmount": 50000,
+              "pointsProgram": "Air France/KLM Flying Blue"
+            },
+            "details": {
+              "flightNumber": "AF 11",
+              "airline": "Air France",
+              "departureAirportName": "John F. Kennedy International Airport",
+              "arrivalAirportName": "Charles de Gaulle Airport",
+              "class": "Business",
+              "aircraft": "Boeing 777-300ER",
+              "details": {
+                "departure": {
+                  "airportCode": "JFK",
+                  "time": "19:30",
+                  "date": "YYYY-MM-DD"
+                },
+                "arrival": {
+                  "airportCode": "CDG",
+                  "time": "08:45",
+                  "date": "YYYY-MM-DD"
+                },
+                "route": "Direct",
+                "showDateChange": "+1 day"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+
+DICTATION AUTO-COMPLETION RULES:
+1. The user is an expert points & miles consultant dictating or typing shorthand after picking flights/hotels manually.
+2. When the user dictates shorthand (e.g. "Fly JFK-CDG on AF 11 May 12 7:30pm-8:45am+1 in biz for 50k Flying Blue + $210, stay at Park Hyatt Paris May 13-16 for 45k Hyatt pts/night"), YOU must automatically fill in ALL tedious boilerplate fields:
+   - Full airport names ("John F. Kennedy International Airport", "Charles de Gaulle Airport")
+   - Airport 3-letter IATA codes ("JFK", "CDG") inside details.details.departure.airportCode and arrival.airportCode
+   - 24-hour or clear times ("19:30", "08:45"), estimated flight duration ("7h 15m"), aircraft type if known, and showDateChange ("+1 day" for overnight flights)
+   - Accurate cost object: if both points and taxes/fees are mentioned, set paymentType to "points" (or "hybrid"), pointsAmount to the points number, pointsProgram to the program name, and cashAmount / totalCashValue to the taxes/fees dollar amount!
+   - Full hotel details: official property name, street address in "location", estimated rating (e.g. 4.8), estimated cash pricePerNight, pointsPerNight, loyaltyProgram, bookingUrl, rich 2-3 sentence detailedDescription, and clear bookingInstructions explaining how to transfer points and book.
+   - Preserve any existing destinations, hotels, activities, restaurants, or transport segments in Current Recommendation State unless the user asked to replace or remove them.
+`;
 
 // AI Copilot Chat Endpoint for interactive dashboard dictation and assistance
 app.post('/api/copilot/chat', async (req, res) => {
@@ -524,35 +758,22 @@ app.post('/api/copilot/chat', async (req, res) => {
         }
 
         const systemInstruction = `
-You are the WanderMint AI Travel Consulting Copilot. You work directly with human boutique and luxury travel consultants to formulate recommendations, optimize flights/points, select TripAdvisor 4.5+ stays, and update the dashboard in real-time.
+You are the WanderMint AI Dictation & Travel Consulting Copilot.
+Your primary role is to turn the travel consultant's voice dictation or typed shorthand into a 100% complete, deeply enriched WanderMint recommendation JSON so the consultant never has to manually fill out tedious form fields.
 
-Core Planning Methodology:
-1. AIRPORT LOGISTICS & FLIGHT HUBS:
-   - Identify the most strategic gateway airports (e.g. fly into PWM vs BGR vs BOS).
-   - Evaluate circular loop vs open-jaw (multi-city) routes to minimize redundant driving.
-   - Cross-reference points & miles (Chase UR, Amex MR, Capital One, Airline miles, Hotel points) vs cash pricing.
-2. DESTINATION PACING:
-   - Divide trips into 2-4 base areas.
-   - Avoid hyper-touristy traps; emphasize charming, authentic local bases with strong character.
-3. ACCOMMODATION CURATION:
-   - Prioritize TripAdvisor 4.5+ hotels, luxury glamping / safari tents, boutique inns, and historic lodges.
-   - Provide 2 accommodation options per destination (Priority 1 and Priority 2).
-4. ACTIVITIES & DINING:
-   - Strictly honor negative constraints (e.g. client prone to sea sickness -> NEVER suggest boat trips).
-   - Highlight local craft breweries, fresh seafood shacks, scenic hiking trails, and historical walks.
+${ADMIN_RECOMMENDATION_SCHEMA_GUIDE}
 
-Current Trip Intake Context:
+Current Trip Intake Context (including client's Points & Miles balances if available):
 ${JSON.stringify(tripContext, null, 2)}
 
 Current Recommendation State in Dashboard:
 ${JSON.stringify(currentRecommendation, null, 2)}
 
-Instructions:
-1. "reply": A natural, professional, insightful conversational response explaining what you did, your recommendations, or answering questions.
-2. "updatedRecommendation": (Optional) If the user asked you to generate, modify, add, or update any part of the recommendation (destinations, hotels, dates, activities, restaurants, flights, overview, notes), provide the FULL updated recommendation JSON conforming to WanderMint schema. If no data change was requested, omit this field or set it to null.
-3. "actionSummary": (Optional) A brief 1-line tag describing what was updated (e.g. "Updated Bar Harbor hotel options" or "Added brewery trail to Portland activities").
-
-Always output valid JSON with keys: "reply", "updatedRecommendation" (optional), "actionSummary" (optional).
+Response Format Instructions:
+Always output valid JSON with keys:
+1. "reply": Concise, helpful confirmation of every field you populated or updated (e.g., flights, points transfer notes, hotels, activities).
+2. "updatedRecommendation": (Optional) Whenever the user dictates or asks to add/modify/remove any trip overview, cost/points strategy notes, destinations, hotels, activities, restaurants, or flights/transport segments, provide the FULL updated recommendation JSON matching the schema above. Omit or set to null only if the user is asking a pure question without changing the recommendation.
+3. "actionSummary": (Optional) A brief 1-line summary badge describing the update (e.g., "Populated AF 11 Business Class flight + Park Hyatt Paris").
 `;
 
         const contents = [];
@@ -573,7 +794,7 @@ Always output valid JSON with keys: "reply", "updatedRecommendation" (optional),
             parts: [{ text: message }]
         });
 
-        const url = `${GEMINI_BASE_URL}/gemini-3.6-flash:generateContent?key=${apiKey}`;
+        const url = `${GEMINI_BASE_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -582,7 +803,7 @@ Always output valid JSON with keys: "reply", "updatedRecommendation" (optional),
                 systemInstruction: { parts: [{ text: systemInstruction }] },
                 contents,
                 generationConfig: {
-                    temperature: 0.4,
+                    temperature: 0.2,
                     topP: 0.95,
                     responseMimeType: 'application/json'
                 }
@@ -641,13 +862,8 @@ app.post('/api/ai/generate-recommendation', async (req, res) => {
 
         const systemInstruction = `
 You are the WanderMint AI Preliminary Itinerary Engine.
-Generate a comprehensive preliminary itinerary recommendation conforming to WanderMint schema and an executive planning dossier.
-Methodology:
-- Strategic airport hubs & logistics analysis (e.g. gateway comparison, loop vs open-jaw)
-- Points vs cash optimization
-- Regional pacing & destination splits (avoiding tourist traps, authentic local base)
-- TripAdvisor 4.5+ vetted hotels and boutique/glamping picks
-- Curated dining (brewery trails, local seafood) and activities (nature walks, history) adhering strictly to negative constraints (no boats, etc.).
+Generate a comprehensive itinerary recommendation conforming to the WanderMint AdminDestinationBasedRecommendation schema and an executive planning dossier.
+${ADMIN_RECOMMENDATION_SCHEMA_GUIDE}
 
 Output format: JSON with "executiveDossier" and "recommendation".
 `;
@@ -656,7 +872,7 @@ Output format: JSON with "executiveDossier" and "recommendation".
 Trip Details: ${JSON.stringify(tripData, null, 2)}
 Points & Loyalty: ${JSON.stringify(pointsData, null, 2)}`;
 
-        const url = `${GEMINI_BASE_URL}/gemini-3.6-flash:generateContent?key=${apiKey}`;
+        const url = `${GEMINI_BASE_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -665,7 +881,7 @@ Points & Loyalty: ${JSON.stringify(pointsData, null, 2)}`;
                 systemInstruction: { parts: [{ text: systemInstruction }] },
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 generationConfig: {
-                    temperature: 0.4,
+                    temperature: 0.3,
                     responseMimeType: 'application/json'
                 }
             })

@@ -26,6 +26,8 @@ window.ActivitiesTab = ({ recommendation, updateRecommendation }) => {
             estimatedCost: { cashAmount: 0 },
             bookingRequired: false,
             bookingUrl: '',
+            website: '',
+            tripadvisorUrl: '',
             bookingInstructions: '',
             tips: []
         });
@@ -55,6 +57,8 @@ window.ActivitiesTab = ({ recommendation, updateRecommendation }) => {
             estimatedCost: { cashAmount: 0 },
             reservationRequired: false,
             reservationInstructions: '',
+            website: '',
+            yelpUrl: '',
             specialties: [],
             tips: []
         });
@@ -270,6 +274,29 @@ window.ActivitiesTab = ({ recommendation, updateRecommendation }) => {
                                     ])
                                 ]),
 
+                                React.createElement('div', { key: 'links-row', className: 'form-row' }, [
+                                    React.createElement('div', { key: 'website-group', className: 'form-group' }, [
+                                        React.createElement('label', { key: 'website-label' }, '🌐 Official Website'),
+                                        React.createElement('input', {
+                                            key: 'website-input',
+                                            type: 'url',
+                                            value: activity.website || '',
+                                            onChange: (e) => updateRecommendation(`destinations[${destIndex}].recommendedActivities[${activityIndex}].website`, e.target.value),
+                                            placeholder: 'https://...'
+                                        })
+                                    ]),
+                                    React.createElement('div', { key: 'tripadvisor-url-group', className: 'form-group' }, [
+                                        React.createElement('label', { key: 'tripadvisor-url-label' }, '🦉 TripAdvisor URL'),
+                                        React.createElement('input', {
+                                            key: 'tripadvisor-url-input',
+                                            type: 'url',
+                                            value: activity.tripadvisorUrl || '',
+                                            onChange: (e) => updateRecommendation(`destinations[${destIndex}].recommendedActivities[${activityIndex}].tripadvisorUrl`, e.target.value),
+                                            placeholder: 'https://www.tripadvisor.com/...'
+                                        })
+                                    ])
+                                ]),
+
                                 activity.bookingRequired ? React.createElement('div', { key: 'booking-details-row', className: 'form-row' }, [
                                     React.createElement('div', { key: 'booking-url-group', className: 'form-group' }, [
                                         React.createElement('label', { key: 'booking-url-label' }, 'Booking URL'),
@@ -480,6 +507,29 @@ window.ActivitiesTab = ({ recommendation, updateRecommendation }) => {
                                             value: restaurant.estimatedCost?.cashAmount || '',
                                             onChange: (e) => updateRecommendation(`destinations[${destIndex}].recommendedRestaurants[${restaurantIndex}].estimatedCost.cashAmount`, parseFloat(e.target.value) || 0),
                                             placeholder: '0.00'
+                                        })
+                                    ])
+                                ]),
+
+                                React.createElement('div', { key: 'restaurant-links-row', className: 'form-row' }, [
+                                    React.createElement('div', { key: 'rest-website-group', className: 'form-group' }, [
+                                        React.createElement('label', { key: 'rest-website-label' }, '🌐 Official Website'),
+                                        React.createElement('input', {
+                                            key: 'rest-website-input',
+                                            type: 'url',
+                                            value: restaurant.website || '',
+                                            onChange: (e) => updateRecommendation(`destinations[${destIndex}].recommendedRestaurants[${restaurantIndex}].website`, e.target.value),
+                                            placeholder: 'https://...'
+                                        })
+                                    ]),
+                                    React.createElement('div', { key: 'yelp-url-group', className: 'form-group' }, [
+                                        React.createElement('label', { key: 'yelp-url-label' }, '🔴 Yelp URL / Reviews'),
+                                        React.createElement('input', {
+                                            key: 'yelp-url-input',
+                                            type: 'url',
+                                            value: restaurant.yelpUrl || '',
+                                            onChange: (e) => updateRecommendation(`destinations[${destIndex}].recommendedRestaurants[${restaurantIndex}].yelpUrl`, e.target.value),
+                                            placeholder: 'https://www.yelp.com/biz/...'
                                         })
                                     ])
                                 ]),
