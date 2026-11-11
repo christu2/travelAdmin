@@ -134,6 +134,18 @@ window.TripCard = ({ trip, onSelect, onEdit, isSelected = false }) => {
                 React.createElement('strong', null, 'Interests: '),
                 trip.interests.slice(0, 3).join(', ') + (trip.interests.length > 3 ? '...' : '')
             ]),
+            trip.petFriendly && React.createElement('div', {
+                key: 'pet-friendly',
+                style: { 
+                    fontSize: '12px', 
+                    color: '#805ad5', 
+                    marginTop: '4px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                }
+            }, '🐾 Pet-Friendly Options Requested'),
             trip.flexibleDates && React.createElement('div', {
                 key: 'flexible',
                 style: { fontSize: '12px', color: '#48bb78', marginTop: '6px' }

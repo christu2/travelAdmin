@@ -17,6 +17,7 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
     const [saveStatus, setSaveStatus] = React.useState('');
     const [loading, setLoading] = React.useState(true);
     const [viewMode, setViewMode] = React.useState('list'); // 'list', 'detail', 'edit'
+    const [isGeneratingAi, setIsGeneratingAi] = React.useState(false);
 
     // Load trips from Firebase
     React.useEffect(() => {
@@ -89,36 +90,17 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
         
         // Initialize recommendation data
         let recommendationData;
-        if (trip.destinationRecommendation) {
-            recommendationData = trip.destinationRecommendation;
+        if (trip.destinationRecommendation && trip.destinationRecommendation.destinations && trip.destinationRecommendation.destinations.length > 0) {
+            recommendationData = window.DataHelpers.normalizeAndCalculateRecommendation
+                ? window.DataHelpers.normalizeAndCalculateRecommendation(trip.destinationRecommendation)
+                : trip.destinationRecommendation;
             console.log('Using destinationRecommendation:', recommendationData);
-            
-            // If destinationRecommendation exists but destinations are empty, populate from trip data
-            if (!recommendationData.destinations || recommendationData.destinations.length === 0) {
-                console.log('destinationRecommendation has empty destinations, populating from trip data...');
-                
-                // Convert trip.destinations (string array) to destination objects
-                if (trip.destinations && trip.destinations.length > 0) {
-                    recommendationData.destinations = trip.destinations.map(dest => ({
-                        name: dest,
-                        accommodations: []
-                    }));
-                    console.log('Populated destinations from trip.destinations:', recommendationData.destinations);
-                } else if (trip.destination) {
-                    recommendationData.destinations = [{
-                        name: trip.destination,
-                        accommodations: []
-                    }];
-                    console.log('Populated destinations from trip.destination:', recommendationData.destinations);
-                }
-            }
         } else if (trip.recommendation) {
-            // Convert legacy format if needed
             recommendationData = window.DataHelpers.convertLegacyRecommendation(trip.recommendation);
             console.log('Using converted recommendation:', recommendationData);
         } else {
             recommendationData = window.DataHelpers.createEmptyRecommendation(trip);
-            console.log('Created empty recommendation:', recommendationData);
+            console.log('Created clean empty recommendation canvas:', recommendationData);
         }
         
         console.log('Final recommendation destinations:', recommendationData?.destinations);
@@ -140,6 +122,35 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
         const updated = { ...newRecommendation };
         window.DataHelpers.setNestedProperty(updated, path, value);
         setNewRecommendation(updated);
+    };
+
+    const handleGenerateAiDraft = async () => {
+        if (!selectedTrip || isGeneratingAi) return;
+        setIsGeneratingAi(true);
+
+        try {
+            const hotelProxyUrl = window.HOTEL_PROXY_URL || 'http://localhost:3002';
+            const response = await fetch(`${hotelProxyUrl}/api/ai/generate-recommendation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tripData: selectedTrip
+                })
+            });
+
+            const data = await response.json();
+            if (data.success && data.recommendation) {
+                setNewRecommendation(data.recommendation);
+                alert('✨ AI Preliminary Recommendation generated! You can review and edit each tab.');
+            } else {
+                alert(`⚠️ AI Generation Notice: ${data.reply || data.error || 'Failed to generate'}`);
+            }
+        } catch (err) {
+            console.error('AI Draft generation error:', err);
+            alert(`⚠️ Could not connect to AI service: ${err.message}. Ensure hotel proxy is running on port 3002.`);
+        } finally {
+            setIsGeneratingAi(false);
+        }
     };
 
     const saveRecommendation = async () => {
@@ -454,10 +465,17 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                         style: { color: '#e53e3e' }
                     }, '✗ Error saving'),
                     React.createElement('button', {
+                        key: 'ai-draft-btn',
+                        className: 'btn btn-secondary',
+                        style: { background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', color: 'white', border: 'none' },
+                        onClick: () => window.dispatchEvent(new CustomEvent('open-wandermint-copilot')),
+                        disabled: saveStatus === 'saving'
+                    }, '🎙️ Dictate to AI Copilot'),
+                    React.createElement('button', {
                         key: 'save-btn',
                         className: 'btn btn-primary',
                         onClick: saveRecommendation,
-                        disabled: saveStatus === 'saving'
+                        disabled: saveStatus === 'saving' || isGeneratingAi
                     }, 'Save Recommendation')
                 ])
             ]),
@@ -743,6 +761,15 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                 key: 'comparison-content',
                 currentUser: currentUser,
                 selectedTrip: selectedTrip
+            }),
+
+            // Floating AI Copilot Panel
+            window.CopilotPanel && React.createElement(window.CopilotPanel, {
+                key: 'copilot-panel',
+                selectedTrip: selectedTrip,
+                newRecommendation: newRecommendation,
+                setNewRecommendation: setNewRecommendation,
+                updateRecommendation: updateRecommendation
             })
         ])
     ]);

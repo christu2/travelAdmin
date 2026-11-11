@@ -81,84 +81,60 @@ window.DestinationsTab = ({
     };
 
 
-    // TripAdvisor auto-fill function
-    const autoFillFromTripAdvisor = async (tripAdvisorId, destIndex, accIndex) => {
+    // 1-Click Hotel Auto-Fill (Google Places + Local Proxy fallback)
+    const autoFillFromTripAdvisor = async (queryOrId, destIndex, accIndex) => {
         try {
-            // Get the destination for date information
             const destination = destinations[destIndex];
-            
-            // Set the TripAdvisor ID first
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorId`, tripAdvisorId);
-            
-            // Use the local hotel proxy server (TripAdvisor API only works locally due to IP restrictions)
-            const hotelProxyUrl = 'http://localhost:3002';
-            
-            // Validate URL for security
-            if (window.SecurityHelpers && !window.SecurityHelpers.validateUrl(hotelProxyUrl)) {
-                console.error('Invalid hotel proxy URL:', hotelProxyUrl);
-                return;
-            }
-            
-            // Check if running locally (TripAdvisor proxy only works locally due to IP restrictions)
-            if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                alert('TripAdvisor auto-fill is only available when running locally due to API IP restrictions. You can still manually enter hotel details.');
-                return;
-            }
-            
-            const response = await fetch(`${hotelProxyUrl}/api/hotels/details/${tripAdvisorId}`);
-                
-            if (response.ok) {
-                const data = await response.json();
-                
-                if (data.success && data.hotel) {
-                    const hotel = data.hotel;
-                    
-                    // Auto-fill hotel details from TripAdvisor proxy data
-                    if (hotel.name) {
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, hotel.name);
+            const searchQuery = `${queryOrId} ${destination?.cityName || ''}`.trim();
+            const hotelProxyUrl = window.HOTEL_PROXY_URL || 'http://localhost:3002';
+
+            // Try local proxy /api/places/enrich first, then Cloud Function googlePlacesProxy
+            let place = null;
+            try {
+                const res = await fetch(`${hotelProxyUrl}/api/places/enrich?query=${encodeURIComponent(searchQuery)}&type=lodging`);
+                if (res.ok) {
+                    const data = await res.json();
+                    place = data.place || (data.results && data.results[0]);
+                }
+            } catch (_) {
+                // Local proxy not running, try Cloud Function with Firebase Auth token
+                try {
+                    const token = firebase.auth?.().currentUser ? await firebase.auth().currentUser.getIdToken() : '';
+                    const cfUrl = `https://us-central1-wandermint-travel-app.cloudfunctions.net/googlePlacesProxy?query=${encodeURIComponent(searchQuery)}`;
+                    const cfRes = await fetch(cfUrl, {
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                    });
+                    if (cfRes.ok) {
+                        const cfData = await cfRes.json();
+                        place = cfData.place || (cfData.results && cfData.results[0]);
                     }
-                    if (hotel.rating) {
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.rating`, parseFloat(hotel.rating));
-                    }
-                    if (hotel.address) {
-                        // Ensure address is a string, not an object
-                        const addressStr = typeof hotel.address === 'string' ? hotel.address : 
-                                         (hotel.address && hotel.address.formatted_address) || 
-                                         'Address not available';
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.location`, addressStr);
-                    }
-                    if (hotel.description) {
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.detailedDescription`, hotel.description);
-                    }
-                    // Set TripAdvisor URL directly from API
-                    if (hotel.tripadvisorUrl) {
-                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, hotel.tripadvisorUrl);
-                    }
-                    
-                    console.log('✅ Auto-filled hotel details from TripAdvisor:', hotel.name);
-                    return;
+                } catch (cfErr) {
+                    console.warn('Cloud Function Places lookup unavailable:', cfErr);
                 }
             }
-            
-            // Fallback: Use TripAdvisor ID for manual lookup
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, `Hotel from TripAdvisor ID: ${tripAdvisorId}`);
-            
-            // Create fallback TripAdvisor URL
-            let fallbackTripAdvisorUrl = `https://www.tripadvisor.com/Hotel_Review-d${tripAdvisorId}.html`;
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, fallbackTripAdvisorUrl);
-            
-            console.log('ℹ️ TripAdvisor API not available via hotel proxy. Using manual lookup.');
-            console.log('📋 TripAdvisor ID stored:', tripAdvisorId);
-            
+
+            if (place) {
+                if (place.name) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, place.name);
+                if (place.rating) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.rating`, Math.min(5, Math.max(1, parseFloat(place.rating))));
+                if (place.address || place.formatted_address) {
+                    updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.location`, place.address || place.formatted_address);
+                }
+                if (place.website) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.bookingUrl`, place.website);
+                if (place.photoUrl) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.photoUrl`, place.photoUrl);
+                if (place.description) updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.detailedDescription`, place.description);
+                if (place.mapsUrl || place.tripadvisorUrl) {
+                    updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, place.tripadvisorUrl || place.mapsUrl);
+                }
+                console.log('✅ Auto-filled hotel details:', place.name);
+                return;
+            }
+
+            // Fallback populate
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, queryOrId);
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, `https://www.tripadvisor.com/Search?q=${encodeURIComponent(searchQuery)}`);
         } catch (error) {
-            // Fallback: Just set the ID and basic info
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, `Hotel from TripAdvisor ID: ${tripAdvisorId}`);
-            
-            // Create error fallback TripAdvisor URL
-            let errorFallbackTripAdvisorUrl = `https://www.tripadvisor.com/Hotel_Review-d${tripAdvisorId}.html`;
-            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, errorFallbackTripAdvisorUrl);
-            
-            console.log('ℹ️ TripAdvisor API error, using manual lookup:', error.message);
+            console.error('Hotel auto-fill error:', error);
+            updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.name`, queryOrId);
         }
     };
     
@@ -203,6 +179,20 @@ window.DestinationsTab = ({
                         value: destination.cityName,
                         onChange: (e) => updateRecommendation(`destinations[${destIndex}].cityName`, e.target.value),
                         placeholder: 'e.g., Madrid, Barcelona, Rome'
+                    })
+                ]),
+
+                React.createElement('div', {
+                    key: 'dest-overview-group',
+                    className: 'form-group'
+                }, [
+                    React.createElement('label', { key: 'label' }, 'Destination Overview / Vibe'),
+                    React.createElement('textarea', {
+                        key: 'textarea',
+                        value: destination.overview || '',
+                        onChange: (e) => updateRecommendation(`destinations[${destIndex}].overview`, e.target.value),
+                        placeholder: 'Why this base works well, pacing notes, neighborhood highlights...',
+                        rows: 2
                     })
                 ]),
 
@@ -322,7 +312,7 @@ window.DestinationsTab = ({
                                 ])
                             ]),
 
-                            // TripAdvisor Auto-Fill Section
+                            // 1-Click Hotel Search & Auto-Fill Section
                             React.createElement('div', {
                                 key: 'tripadvisor-section',
                                 style: { background: '#f8f9fa', padding: '15px', borderRadius: '8px', marginBottom: '20px' }
@@ -330,7 +320,7 @@ window.DestinationsTab = ({
                                 React.createElement('h6', {
                                     key: 'title',
                                     style: { margin: '0 0 15px 0', color: '#2d3748' }
-                                }, '🔍 TripAdvisor Auto-Fill'),
+                                }, '🔍 1-Click Hotel Search & Auto-Fill'),
                                 React.createElement('div', {
                                     key: 'tripadvisor-input',
                                     style: { marginBottom: '10px' }
@@ -338,7 +328,7 @@ window.DestinationsTab = ({
                                     React.createElement('label', {
                                         key: 'label',
                                         style: { display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }
-                                    }, 'TripAdvisor Hotel ID'),
+                                    }, 'Hotel Name (auto-fills address, rating, website & photo)'),
                                     React.createElement('div', {
                                         key: 'input-row',
                                         style: { display: 'flex', gap: '8px', alignItems: 'center' }
@@ -346,7 +336,7 @@ window.DestinationsTab = ({
                                         React.createElement('input', {
                                             key: 'id-input',
                                             type: 'text',
-                                            placeholder: 'e.g., 188154',
+                                            placeholder: 'e.g., Park Hyatt Paris-Vendôme or Terramor Bar Harbor',
                                             style: { 
                                                 flex: '1',
                                                 padding: '6px 10px',
@@ -565,7 +555,15 @@ window.DestinationsTab = ({
                                     key: 'location-group',
                                     className: 'form-group'
                                 }, [
-                                    React.createElement('label', { key: 'label' }, 'Location'),
+                                    React.createElement('label', { key: 'label' }, [
+                                        'Location',
+                                        option.hotel.location ? React.createElement('a', {
+                                            key: 'map-link',
+                                            href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${option.hotel.name} ${option.hotel.location}`)}`,
+                                            target: '_blank',
+                                            style: { fontSize: '11px', color: '#2563eb', marginLeft: '8px', textDecoration: 'none' }
+                                        }, '🗺️ View on Google Maps') : null
+                                    ]),
                                     React.createElement('input', {
                                         key: 'input',
                                         type: 'text',
@@ -596,6 +594,19 @@ window.DestinationsTab = ({
                                         value: option.hotel.tripadvisorUrl || '',
                                         onChange: (e) => updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.tripadvisorUrl`, e.target.value)
                                     })
+                                ]),
+                                React.createElement('div', {
+                                    key: 'photo-url-group',
+                                    className: 'form-group'
+                                }, [
+                                    React.createElement('label', { key: 'label' }, '📷 Photo URL'),
+                                    React.createElement('input', {
+                                        key: 'input',
+                                        type: 'url',
+                                        value: option.hotel.photoUrl || '',
+                                        onChange: (e) => updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.photoUrl`, e.target.value),
+                                        placeholder: 'https://...'
+                                    })
                                 ])
                             ]),
 
@@ -609,6 +620,23 @@ window.DestinationsTab = ({
                                     value: option.hotel.detailedDescription,
                                     onChange: (e) => updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.detailedDescription`, e.target.value),
                                     rows: 3
+                                })
+                            ]),
+
+                            React.createElement('div', {
+                                key: 'booking-instructions-group',
+                                className: 'form-group'
+                            }, [
+                                React.createElement('label', { key: 'label' }, '✨ Booking & Points Transfer Instructions'),
+                                React.createElement('textarea', {
+                                    key: 'textarea',
+                                    value: option.hotel.bookingInstructions || option.bookingInstructions || '',
+                                    onChange: (e) => {
+                                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].hotel.bookingInstructions`, e.target.value);
+                                        updateRecommendation(`destinations[${destIndex}].accommodationOptions[${accIndex}].bookingInstructions`, e.target.value);
+                                    },
+                                    placeholder: 'e.g., Transfer 45,000 Chase UR points/night to World of Hyatt, or book via Amex FHR to use your $200 Platinum hotel credit...',
+                                    rows: 2
                                 })
                             ])
                         ])
