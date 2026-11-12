@@ -14,6 +14,8 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
     const [isLoading, setIsLoading] = React.useState(false);
     const [userPointsProfile, setUserPointsProfile] = React.useState(null);
     const [undoStack, setUndoStack] = React.useState([]);
+    const [customApiKey, setCustomApiKey] = React.useState(() => localStorage.getItem('wandermint_gemini_api_key') || '');
+    const [showKeyConfig, setShowKeyConfig] = React.useState(false);
     const [messages, setMessages] = React.useState([
         {
             role: 'assistant',
@@ -142,7 +144,7 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                         const token = window.firebase?.auth?.().currentUser
                             ? await window.firebase.auth().currentUser.getIdToken()
                             : '';
-                        const cfUrl = `https://us-central1-wandermint-travel-app.cloudfunctions.net/googlePlacesProxy?query=${encodeURIComponent(query)}`;
+                        const cfUrl = `https://us-central1-travel-consulting-app-1.cloudfunctions.net/googlePlacesProxy?query=${encodeURIComponent(query)}`;
                         const cfRes = await fetch(cfUrl, {
                             headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                         });
@@ -207,11 +209,12 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                     ...(selectedTrip || {}),
                     userPointsProfile: userPointsProfile || null
                 },
-                currentRecommendation: newRecommendation || {}
+                currentRecommendation: newRecommendation || {},
+                ...(customApiKey ? { apiKey: customApiKey } : {})
             };
 
             let data = null;
-            // Try local proxy first; if unavailable, fall back to Firebase Cloud Function
+            // Try local proxy first; if unavailable or throws error, fall back to Firebase Cloud Function
             try {
                 const response = await fetch(`${hotelProxyUrl}/api/copilot/chat`, {
                     method: 'POST',
@@ -219,20 +222,31 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                     body: JSON.stringify(payload)
                 });
                 data = await response.json();
+                if (!response.ok && data?.error?.includes('402')) {
+                    // Prepayment depleted or key issue: notify user clearly
+                    throw new Error(data.reply || data.error);
+                }
             } catch (localErr) {
-                const token = window.firebase?.auth?.().currentUser
-                    ? await window.firebase.auth().currentUser.getIdToken()
-                    : '';
-                const cfUrl = 'https://us-central1-wandermint-travel-app.cloudfunctions.net/copilotChat';
-                const cfResponse = await fetch(cfUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                    },
-                    body: JSON.stringify(payload)
-                });
-                data = await cfResponse.json();
+                console.warn('Local proxy copilot note:', localErr.message);
+                try {
+                    const token = window.firebase?.auth?.().currentUser
+                        ? await window.firebase.auth().currentUser.getIdToken()
+                        : '';
+                    const cfUrl = 'https://us-central1-travel-consulting-app-1.cloudfunctions.net/copilotChat';
+                    const cfResponse = await fetch(cfUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    data = await cfResponse.json();
+                } catch (cfErr) {
+                    if (!data) {
+                        throw new Error(localErr.message || cfErr.message);
+                    }
+                }
             }
 
             if (data && data.success) {
@@ -395,6 +409,21 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                 key: 'header-actions',
                 style: { display: 'flex', alignItems: 'center', gap: '8px' }
             }, [
+                React.createElement('button', {
+                    key: 'key-btn',
+                    onClick: () => setShowKeyConfig(!showKeyConfig),
+                    title: 'Configure Gemini API Key',
+                    style: {
+                        background: customApiKey ? 'rgba(16, 185, 129, 0.35)' : 'rgba(255, 255, 255, 0.2)',
+                        border: '1px solid rgba(255, 255, 255, 0.35)',
+                        color: 'white',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: '600'
+                    }
+                }, customApiKey ? '🔑 Key Active' : '⚙️ API Key'),
                 undoStack.length > 0 && React.createElement('button', {
                     key: 'undo-btn',
                     onClick: handleUndo,
@@ -427,6 +456,75 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                         justifyContent: 'center'
                     }
                 }, '✕')
+            ])
+        ]),
+
+        // API Key Configuration Drawer
+        showKeyConfig && React.createElement('div', {
+            key: 'key-config-drawer',
+            style: {
+                background: '#f8fafc',
+                borderBottom: '1px solid #e2e8f0',
+                padding: '12px 16px',
+                fontSize: '12px'
+            }
+        }, [
+            React.createElement('div', {
+                key: 'label',
+                style: { fontWeight: '600', color: '#1e293b', marginBottom: '4px' }
+            }, '🔑 Gemini API Key (Optional override):'),
+            React.createElement('div', {
+                key: 'input-row',
+                style: { display: 'flex', gap: '8px' }
+            }, [
+                React.createElement('input', {
+                    key: 'key-input',
+                    type: 'password',
+                    placeholder: 'Paste AI Studio Key (AIzaSy...)',
+                    value: customApiKey,
+                    onChange: (e) => {
+                        const val = e.target.value.trim();
+                        setCustomApiKey(val);
+                        if (val) localStorage.setItem('wandermint_gemini_api_key', val);
+                        else localStorage.removeItem('wandermint_gemini_api_key');
+                    },
+                    style: {
+                        flex: 1,
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px'
+                    }
+                }),
+                customApiKey && React.createElement('button', {
+                    key: 'clear-key',
+                    onClick: () => {
+                        setCustomApiKey('');
+                        localStorage.removeItem('wandermint_gemini_api_key');
+                    },
+                    style: {
+                        background: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        cursor: 'pointer',
+                        fontSize: '11px'
+                    }
+                }, 'Clear')
+            ]),
+            React.createElement('div', {
+                key: 'hint',
+                style: { fontSize: '11px', color: '#64748b', marginTop: '6px' }
+            }, [
+                'Free key available in seconds at ',
+                React.createElement('a', {
+                    key: 'link',
+                    href: 'https://aistudio.google.com/app/apikey',
+                    target: '_blank',
+                    rel: 'noreferrer',
+                    style: { color: '#4f46e5', textDecoration: 'underline' }
+                }, 'aistudio.google.com/app/apikey')
             ])
         ]),
 
