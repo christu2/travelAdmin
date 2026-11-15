@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const http2 = require('http2');
 require('dotenv').config();
 
 const app = express();
@@ -20,7 +21,7 @@ const FOURSQUARE_BASE_URL = 'https://api.foursquare.com/v3/places';
 
 // Gemini AI API configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
@@ -730,7 +731,8 @@ CRITICAL: Whenever you return "updatedRecommendation", it MUST conform strictly 
 
 DICTATION AUTO-COMPLETION RULES:
 1. The user is an expert points & miles consultant dictating or typing shorthand after picking flights/hotels manually.
-2. When the user dictates shorthand (e.g. "Fly JFK-CDG on AF 11 May 12 7:30pm-8:45am+1 in biz for 50k Flying Blue + $210, stay at Park Hyatt Paris May 13-16 for 45k Hyatt pts/night"), YOU must automatically fill in ALL tedious boilerplate fields:
+2. DATE INFERENCE: When the user specifies month/day without a year (e.g., "Nov 15-18"), determine the year from Current Trip Intake Context (startDate/endDate) if present, or use the upcoming occurrence on or after Today's Date provided below (never default to past years like 2024).
+3. When the user dictates shorthand (e.g. "Fly JFK-CDG on AF 11 May 12 7:30pm-8:45am+1 in biz for 50k Flying Blue + $210, stay at Park Hyatt Paris May 13-16 for 45k Hyatt pts/night"), YOU must automatically fill in ALL tedious boilerplate fields:
    - Full airport names ("John F. Kennedy International Airport", "Charles de Gaulle Airport")
    - Airport 3-letter IATA codes ("JFK", "CDG") inside details.details.departure.airportCode and arrival.airportCode
    - 24-hour or clear times ("19:30", "08:45"), estimated flight duration ("7h 15m"), aircraft type if known, and showDateChange ("+1 day" for overnight flights)
@@ -738,6 +740,60 @@ DICTATION AUTO-COMPLETION RULES:
    - Full hotel details: official property name, street address in "location", estimated rating (e.g. 4.8), estimated cash pricePerNight, pointsPerNight, loyaltyProgram, bookingUrl, rich 2-3 sentence detailedDescription, and clear bookingInstructions explaining how to transfer points and book.
    - Preserve any existing destinations, hotels, activities, restaurants, or transport segments in Current Recommendation State unless the user asked to replace or remove them.
 `;
+
+/**
+ * Calls the Gemini API over HTTP/2 (preventing HTTP/1.1 ECONNRESET socket drops from local networks).
+ */
+function callGeminiContent(apiKey, payload, model = GEMINI_MODEL) {
+    return new Promise((resolve, reject) => {
+        const client = http2.connect('https://generativelanguage.googleapis.com');
+        const bodyStr = JSON.stringify(payload);
+        let settled = false;
+
+        const finish = (err, val) => {
+            if (settled) return;
+            settled = true;
+            try { client.close(); } catch (_) {}
+            if (err) reject(err);
+            else resolve(val);
+        };
+
+        client.setTimeout(60000, () => finish(new Error('Gemini HTTP/2 request timed out')));
+        client.on('error', err => finish(err));
+
+        const req = client.request({
+            ':method': 'POST',
+            ':path': `/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+            'content-type': 'application/json',
+            'content-length': Buffer.byteLength(bodyStr)
+        });
+
+        let status = 0;
+        const chunks = [];
+        req.on('response', headers => {
+            status = Number(headers[':status'] || 0);
+        });
+        req.on('data', chunk => chunks.push(chunk));
+        req.on('end', () => {
+            const raw = Buffer.concat(chunks).toString('utf8');
+            if (status < 200 || status >= 300) {
+                return finish(new Error(`Gemini API returned ${status}: ${raw}`));
+            }
+            try {
+                const data = JSON.parse(raw);
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) return finish(new Error('Empty response received from Gemini API'));
+                finish(null, text);
+            } catch (e) {
+                finish(new Error(`Failed to parse Gemini JSON: ${e.message}`));
+            }
+        });
+        req.on('error', err => finish(err));
+
+        req.write(bodyStr);
+        req.end();
+    });
+}
 
 // AI Copilot Chat Endpoint for interactive dashboard dictation and assistance
 app.post('/api/copilot/chat', async (req, res) => {
@@ -757,8 +813,11 @@ app.post('/api/copilot/chat', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Message is required' });
         }
 
+        const todayStr = new Date().toISOString().split('T')[0];
+
         const systemInstruction = `
 You are the WanderMint AI Dictation & Travel Consulting Copilot.
+Today's Date: ${todayStr}
 Your primary role is to turn the travel consultant's voice dictation or typed shorthand into a 100% complete, deeply enriched WanderMint recommendation JSON so the consultant never has to manually fill out tedious form fields.
 
 ${ADMIN_RECOMMENDATION_SCHEMA_GUIDE}
@@ -794,29 +853,15 @@ Always output valid JSON with keys:
             parts: [{ text: message }]
         });
 
-        const url = `${GEMINI_BASE_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                systemInstruction: { parts: [{ text: systemInstruction }] },
-                contents,
-                generationConfig: {
-                    temperature: 0.2,
-                    topP: 0.95,
-                    responseMimeType: 'application/json'
-                }
-            })
+        const rawText = await callGeminiContent(apiKey, {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents,
+            generationConfig: {
+                temperature: 0.2,
+                topP: 0.95,
+                responseMimeType: 'application/json'
+            }
         });
-
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Gemini API returned ${response.status}: ${errText}`);
-        }
-
-        const data = await response.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         
         let parsed;
         try {
@@ -860,8 +905,11 @@ app.post('/api/ai/generate-recommendation', async (req, res) => {
             return res.status(400).json({ success: false, error: 'tripData is required' });
         }
 
+        const todayStr = new Date().toISOString().split('T')[0];
+
         const systemInstruction = `
 You are the WanderMint AI Preliminary Itinerary Engine.
+Today's Date: ${todayStr}
 Generate a comprehensive itinerary recommendation conforming to the WanderMint AdminDestinationBasedRecommendation schema and an executive planning dossier.
 ${ADMIN_RECOMMENDATION_SCHEMA_GUIDE}
 
@@ -872,28 +920,14 @@ Output format: JSON with "executiveDossier" and "recommendation".
 Trip Details: ${JSON.stringify(tripData, null, 2)}
 Points & Loyalty: ${JSON.stringify(pointsData, null, 2)}`;
 
-        const url = `${GEMINI_BASE_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                systemInstruction: { parts: [{ text: systemInstruction }] },
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.3,
-                    responseMimeType: 'application/json'
-                }
-            })
+        const rawText = await callGeminiContent(apiKey, {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+                temperature: 0.3,
+                responseMimeType: 'application/json'
+            }
         });
-
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Gemini API error (${response.status}): ${errText}`);
-        }
-
-        const data = await response.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         const parsed = JSON.parse(rawText);
 
         res.json({
