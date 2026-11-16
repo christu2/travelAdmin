@@ -733,6 +733,24 @@ DICTATION AUTO-COMPLETION RULES:
    - Preserve any existing destinations, hotels, activities, restaurants, or transport segments in Current Recommendation State unless the user asked to replace or remove them.
 `;
 
+const GEMINI_FALLBACK_MODELS = [
+    'gemini-3-flash-preview',
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-flash-latest'
+];
+
+function sanitizePayloadForModel(payload, targetModel) {
+    if (!targetModel.includes('lite')) return payload;
+    const copy = JSON.parse(JSON.stringify(payload));
+    if (copy.generationConfig && copy.generationConfig.thinkingConfig) {
+        delete copy.generationConfig.thinkingConfig;
+    }
+    return copy;
+}
+
 /**
  * Calls the Gemini API over HTTP/2 + IPv4 (preventing IPv6 connection stalls and HTTP/1.1 ECONNRESET drops).
  */
@@ -747,7 +765,7 @@ function callGeminiContent(apiKey, payload, model = GEMINI_MODEL) {
                 ALPNProtocols: ['h2']
             })
         });
-        const bodyStr = JSON.stringify(payload);
+        const bodyStr = JSON.stringify(sanitizePayloadForModel(payload, model));
         let settled = false;
 
         const finish = (err, val) => {
@@ -758,7 +776,7 @@ function callGeminiContent(apiKey, payload, model = GEMINI_MODEL) {
             else resolve(val);
         };
 
-        client.setTimeout(60000, () => finish(new Error('Gemini HTTP/2 request timed out')));
+        client.setTimeout(25000, () => finish(new Error('Gemini HTTP/2 request timed out')));
         client.on('error', err => finish(err));
 
         const req = client.request({
@@ -777,7 +795,9 @@ function callGeminiContent(apiKey, payload, model = GEMINI_MODEL) {
         req.on('end', () => {
             const raw = Buffer.concat(chunks).toString('utf8');
             if (status < 200 || status >= 300) {
-                return finish(new Error(`Gemini API returned ${status}: ${raw}`));
+                const err = new Error(`Gemini API returned ${status}: ${raw}`);
+                err.status = status;
+                return finish(err);
             }
             try {
                 const data = JSON.parse(raw);
@@ -795,14 +815,36 @@ function callGeminiContent(apiKey, payload, model = GEMINI_MODEL) {
     });
 }
 
-async function callGeminiWithFallbackKey(requestApiKey, payload, model = GEMINI_MODEL) {
+async function callGeminiWithFallbackKey(requestApiKey, payload, preferredModel = GEMINI_MODEL) {
+    const modelsToTry = [preferredModel, ...GEMINI_FALLBACK_MODELS.filter(m => m !== preferredModel)];
+    const tryModelsWithKey = async (targetKey) => {
+        let lastErr;
+        for (const model of modelsToTry) {
+            try {
+                return await callGeminiContent(targetKey, payload, model);
+            } catch (err) {
+                lastErr = err;
+                const isRetryableModelErr =
+                    err.status === 429 ||
+                    err.status === 404 ||
+                    err.status === 503 ||
+                    /timed out/i.test(err.message);
+                if (!isRetryableModelErr) {
+                    throw err;
+                }
+                console.warn(`[Copilot] Model ${model} returned ${err.status || err.message}; trying next fallback model...`);
+            }
+        }
+        throw lastErr;
+    };
+
     const primaryKey = requestApiKey || GEMINI_API_KEY;
     try {
-        return await callGeminiContent(primaryKey, payload, model);
+        return await tryModelsWithKey(primaryKey);
     } catch (err) {
         if (requestApiKey && GEMINI_API_KEY && requestApiKey !== GEMINI_API_KEY && /returned (400|402|403)/.test(err.message)) {
             console.warn('[Copilot] Client override API key failed; falling back to server .env GEMINI_API_KEY.');
-            return await callGeminiContent(GEMINI_API_KEY, payload, model);
+            return await tryModelsWithKey(GEMINI_API_KEY);
         }
         throw err;
     }
