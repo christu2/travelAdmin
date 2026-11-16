@@ -144,7 +144,7 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                         const token = window.firebase?.auth?.().currentUser
                             ? await window.firebase.auth().currentUser.getIdToken()
                             : '';
-                        const cfUrl = `https://us-central1-travel-consulting-app-1.cloudfunctions.net/googlePlacesProxy?query=${encodeURIComponent(query)}`;
+                        const cfUrl = `https://googleplacesproxy-z7ztkcre7q-uc.a.run.app?query=${encodeURIComponent(query)}`;
                         const cfRes = await fetch(cfUrl, {
                             headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                         });
@@ -202,51 +202,56 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                 text: m.text
             }));
 
-            const payload = {
+            const basePayload = {
                 message: text,
                 history,
                 tripContext: {
                     ...(selectedTrip || {}),
                     userPointsProfile: userPointsProfile || null
                 },
-                currentRecommendation: newRecommendation || {},
-                ...(customApiKey ? { apiKey: customApiKey } : {})
+                currentRecommendation: newRecommendation || {}
             };
 
-            let data = null;
-            // Try local proxy first; if unavailable or throws error, fall back to Firebase Cloud Function
-            try {
-                const response = await fetch(`${hotelProxyUrl}/api/copilot/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                data = await response.json();
-                if (!response.ok && data?.error?.includes('402')) {
-                    // Prepayment depleted or key issue: notify user clearly
-                    throw new Error(data.reply || data.error);
-                }
-            } catch (localErr) {
-                console.warn('Local proxy copilot note:', localErr.message);
-                try {
-                    const token = window.firebase?.auth?.().currentUser
-                        ? await window.firebase.auth().currentUser.getIdToken()
-                        : '';
-                    const cfUrl = 'https://us-central1-travel-consulting-app-1.cloudfunctions.net/copilotChat';
-                    const cfResponse = await fetch(cfUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                        },
-                        body: JSON.stringify(payload)
-                    });
-                    data = await cfResponse.json();
-                } catch (cfErr) {
-                    if (!data) {
-                        throw new Error(localErr.message || cfErr.message);
+            const callCopilot = async (requestPayload) => {
+                const isLocalProxy = hotelProxyUrl && !hotelProxyUrl.includes('your-production-domain.com');
+                if (isLocalProxy) {
+                    try {
+                        const response = await fetch(`${hotelProxyUrl}/api/copilot/chat`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(requestPayload)
+                        });
+                        return await response.json();
+                    } catch (localErr) {
+                        console.warn('Local proxy unreachable, falling back to Cloud Function:', localErr.message);
                     }
                 }
+
+                const token = window.firebase?.auth?.().currentUser
+                    ? await window.firebase.auth().currentUser.getIdToken()
+                    : '';
+                const cfUrl = 'https://copilotchat-z7ztkcre7q-uc.a.run.app';
+                const cfResponse = await fetch(cfUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify(requestPayload)
+                });
+                return await cfResponse.json();
+            };
+
+            let data = await callCopilot(
+                customApiKey ? { ...basePayload, apiKey: customApiKey } : basePayload
+            );
+
+            // If a stale browser localStorage API key caused 402/400/403, clear it and retry with server .env key
+            if (customApiKey && data && !data.success && /402|400|403|API_KEY_INVALID|prepayment/i.test(data.error || data.reply || '')) {
+                console.warn('Clearing stale browser API key override and retrying with server .env key');
+                localStorage.removeItem('wandermint_gemini_api_key');
+                setCustomApiKey('');
+                data = await callCopilot(basePayload);
             }
 
             if (data && data.success) {

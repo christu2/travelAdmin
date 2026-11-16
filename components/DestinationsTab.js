@@ -100,7 +100,7 @@ window.DestinationsTab = ({
                 // Local proxy not running, try Cloud Function with Firebase Auth token
                 try {
                     const token = firebase.auth?.().currentUser ? await firebase.auth().currentUser.getIdToken() : '';
-                    const cfUrl = `https://us-central1-wandermint-travel-app.cloudfunctions.net/googlePlacesProxy?query=${encodeURIComponent(searchQuery)}`;
+                    const cfUrl = `https://googleplacesproxy-z7ztkcre7q-uc.a.run.app?query=${encodeURIComponent(searchQuery)}`;
                     const cfRes = await fetch(cfUrl, {
                         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                     });
