@@ -2,7 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const http2 = require('http2');
-require('dotenv').config();
+const tls = require('tls');
+require('dotenv').config({ override: true });
 
 const app = express();
 const PORT = process.env.HOTEL_PROXY_PORT || 3002;
@@ -742,11 +743,19 @@ DICTATION AUTO-COMPLETION RULES:
 `;
 
 /**
- * Calls the Gemini API over HTTP/2 (preventing HTTP/1.1 ECONNRESET socket drops from local networks).
+ * Calls the Gemini API over HTTP/2 + IPv4 (preventing IPv6 connection stalls and HTTP/1.1 ECONNRESET drops).
  */
 function callGeminiContent(apiKey, payload, model = GEMINI_MODEL) {
     return new Promise((resolve, reject) => {
-        const client = http2.connect('https://generativelanguage.googleapis.com');
+        const client = http2.connect('https://generativelanguage.googleapis.com', {
+            createConnection: (authority) => tls.connect({
+                host: authority.hostname,
+                port: authority.port || 443,
+                servername: authority.hostname,
+                family: 4,
+                ALPNProtocols: ['h2']
+            })
+        });
         const bodyStr = JSON.stringify(payload);
         let settled = false;
 
@@ -793,6 +802,19 @@ function callGeminiContent(apiKey, payload, model = GEMINI_MODEL) {
         req.write(bodyStr);
         req.end();
     });
+}
+
+async function callGeminiWithFallbackKey(requestApiKey, payload, model = GEMINI_MODEL) {
+    const primaryKey = requestApiKey || GEMINI_API_KEY;
+    try {
+        return await callGeminiContent(primaryKey, payload, model);
+    } catch (err) {
+        if (requestApiKey && GEMINI_API_KEY && requestApiKey !== GEMINI_API_KEY && /returned (400|402|403)/.test(err.message)) {
+            console.warn('[Copilot] Client override API key failed; falling back to server .env GEMINI_API_KEY.');
+            return await callGeminiContent(GEMINI_API_KEY, payload, model);
+        }
+        throw err;
+    }
 }
 
 // AI Copilot Chat Endpoint for interactive dashboard dictation and assistance
@@ -853,13 +875,14 @@ Always output valid JSON with keys:
             parts: [{ text: message }]
         });
 
-        const rawText = await callGeminiContent(apiKey, {
+        const rawText = await callGeminiWithFallbackKey(req.body.apiKey, {
             systemInstruction: { parts: [{ text: systemInstruction }] },
             contents,
             generationConfig: {
                 temperature: 0.2,
                 topP: 0.95,
-                responseMimeType: 'application/json'
+                responseMimeType: 'application/json',
+                thinkingConfig: { thinkingBudget: 0 }
             }
         });
         
@@ -920,12 +943,13 @@ Output format: JSON with "executiveDossier" and "recommendation".
 Trip Details: ${JSON.stringify(tripData, null, 2)}
 Points & Loyalty: ${JSON.stringify(pointsData, null, 2)}`;
 
-        const rawText = await callGeminiContent(apiKey, {
+        const rawText = await callGeminiWithFallbackKey(req.body.apiKey, {
             systemInstruction: { parts: [{ text: systemInstruction }] },
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
                 temperature: 0.3,
-                responseMimeType: 'application/json'
+                responseMimeType: 'application/json',
+                thinkingConfig: { thinkingBudget: 0 }
             }
         });
         const parsed = JSON.parse(rawText);

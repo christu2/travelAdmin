@@ -407,7 +407,7 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                 React.createElement('span', { key: 'icon', style: { fontSize: '20px' } }, '🎙️'),
                 React.createElement('div', { key: 'title-info' }, [
                     React.createElement('div', { key: 'name', style: { fontWeight: '700', fontSize: '15px' } }, 'WanderMint Dictation Copilot'),
-                    React.createElement('div', { key: 'sub', style: { fontSize: '11px', opacity: 0.9 } }, 'Gemini 2.5 Flash • Auto-fills Flights, Hotels, Links & Math')
+                    React.createElement('div', { key: 'sub', style: { fontSize: '11px', opacity: 0.9 } }, 'Gemini 3.5 Flash • Auto-fills Flights, Hotels, Links & Math')
                 ])
             ]),
             React.createElement('div', {
