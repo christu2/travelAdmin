@@ -138,7 +138,7 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                         const res = await fetch(`${hotelProxyUrl}/api/places/enrich?query=${encodeURIComponent(query)}&type=lodging`);
                         if (res.ok) {
                             const data = await res.json();
-                            place = data.place || (data.results && data.results[0]);
+                            place = data.place || (data.data && data.data[0]) || (data.results && data.results[0]);
                         }
                     } catch (_) {
                         const token = window.firebase?.auth?.().currentUser
@@ -150,11 +150,11 @@ window.CopilotPanel = ({ selectedTrip, newRecommendation, setNewRecommendation, 
                         });
                         if (cfRes.ok) {
                             const cfData = await cfRes.json();
-                            place = cfData.place || (cfData.results && cfData.results[0]);
+                            place = cfData.place || (cfData.data && cfData.data[0]) || (cfData.results && cfData.results[0]);
                         }
                     }
 
-                    if (place) {
+                    if (place && place.source !== 'mock') {
                         if (!hotel.location || hotel.location === dest.cityName) {
                             hotel.location = place.address || place.formatted_address || hotel.location;
                         }

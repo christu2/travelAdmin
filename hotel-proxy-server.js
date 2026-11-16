@@ -569,21 +569,8 @@ app.get('/api/places/enrich', async (req, res) => {
             }
         }
 
-        // Fallback to local hotel search helper if GOOGLE_PLACES_API_KEY is not set
-        const fallbackHotels = await searchHotelsWithFoursquare(query) || generateMockHotels(query);
-        const mapped = (fallbackHotels || []).map(h => ({
-            id: h.location_id || `place_${Date.now()}`,
-            name: h.name || query,
-            location: h.address_obj?.address_string || query,
-            rating: h.rating ? parseFloat(h.rating) : 4.5,
-            numReviews: h.num_reviews ? parseInt(h.num_reviews, 10) : 120,
-            bookingUrl: h.web_url || '',
-            googleMapsUrl: '',
-            description: h.description || '',
-            photoUrl: h.photo_url || '',
-            phone: h.phone || ''
-        }));
-        res.json({ status: 'success', data: mapped });
+        // No mock addresses returned for /api/places/enrich so real Copilot hotel details are never overwritten
+        return res.json({ status: 'success', data: [] });
     } catch (error) {
         console.error('[Places Enrich Error]', error);
         res.status(500).json({ error: error.message });
@@ -620,7 +607,7 @@ CRITICAL: Whenever you return "updatedRecommendation", it MUST conform strictly 
             "id": "hotel_1",
             "name": "Park Hyatt Paris-Vendôme",
             "rating": 4.8,
-            "pricePerNight": 1100,
+            "pricePerNight": 0,
             "pointsPerNight": 45000,
             "loyaltyProgram": "World of Hyatt",
             "location": "5 Rue de la Paix, 75002 Paris, France",
@@ -738,7 +725,11 @@ DICTATION AUTO-COMPLETION RULES:
    - Airport 3-letter IATA codes ("JFK", "CDG") inside details.details.departure.airportCode and arrival.airportCode
    - 24-hour or clear times ("19:30", "08:45"), estimated flight duration ("7h 15m"), aircraft type if known, and showDateChange ("+1 day" for overnight flights)
    - Accurate cost object: if both points and taxes/fees are mentioned, set paymentType to "points" (or "hybrid"), pointsAmount to the points number, pointsProgram to the program name, and cashAmount / totalCashValue to the taxes/fees dollar amount!
-   - Full hotel details: official property name, street address in "location", estimated rating (e.g. 4.8), estimated cash pricePerNight, pointsPerNight, loyaltyProgram, bookingUrl, rich 2-3 sentence detailedDescription, and clear bookingInstructions explaining how to transfer points and book.
+   - Full hotel details: official property name, street address in "location", estimated rating (e.g. 4.8), loyaltyProgram, bookingUrl, rich 2-3 sentence detailedDescription, and clear bookingInstructions explaining how to transfer points and book.
+   - CASH vs. POINTS HOTELS RULE (CRITICAL):
+     * When the user specifies a POINTS redemption for a hotel (e.g. "Hyatt Place Madison for 12K Hyatt points a night", "45k Hyatt pts/night") WITHOUT specifying a cash rate or Cash+Points split, ALWAYS set hotel.pricePerNight to 0 and set hotel.pointsPerNight to the points amount (e.g. 12000). Do NOT invent or estimate a nightly cash rate on a points-only stay!
+     * Conversely, when the user specifies a CASH booking without points, set hotel.pointsPerNight to 0 and set hotel.pricePerNight to the cash rate.
+     * Only set BOTH pricePerNight > 0 and pointsPerNight > 0 if the user explicitly asks for Cash + Points or cash-vs-points comparison.
    - Preserve any existing destinations, hotels, activities, restaurants, or transport segments in Current Recommendation State unless the user asked to replace or remove them.
 `;
 
