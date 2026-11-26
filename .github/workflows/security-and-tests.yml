@@ -1,0 +1,50 @@
+name: Security Audit & Admin Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+jobs:
+  security-and-tests:
+    name: Admin Tests, Hosting Headers & CVE Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Admin Jest suite
+        run: npm test
+
+      - name: Enforce zero High/Critical production CVEs
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Verify Hosting security headers & legal rewrites
+        run: |
+          node -e '
+            const cfg = require("./firebase.json");
+            const headers = cfg.hosting.headers.flatMap(h => h.headers).map(h => h.key);
+            for (const req of ["Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options", "Permissions-Policy", "Referrer-Policy"]) {
+              if (!headers.includes(req)) { console.error("Missing header:", req); process.exit(1); }
+            }
+            const sources = cfg.hosting.rewrites.map(r => r.source);
+            for (const s of ["/privacy", "/terms"]) {
+              if (!sources.includes(s)) { console.error("Missing rewrite:", s); process.exit(1); }
+            }
+            console.log("✅ All required Hosting security headers and legal rewrites verified.");
+          '
