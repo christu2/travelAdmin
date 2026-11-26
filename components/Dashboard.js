@@ -18,6 +18,7 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
     const [loading, setLoading] = React.useState(true);
     const [viewMode, setViewMode] = React.useState('list'); // 'list', 'detail', 'edit'
     const [isGeneratingAi, setIsGeneratingAi] = React.useState(false);
+    const [isTemplatesOpen, setIsTemplatesOpen] = React.useState(false);
 
     // Load trips from Firebase
     React.useEffect(() => {
@@ -465,6 +466,13 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                         style: { color: '#e53e3e' }
                     }, '✗ Error saving'),
                     React.createElement('button', {
+                        key: 'templates-btn',
+                        className: 'btn btn-secondary',
+                        style: { background: '#0f766e', color: 'white', border: 'none' },
+                        onClick: () => setIsTemplatesOpen(true),
+                        disabled: saveStatus === 'saving'
+                    }, '📚 Templates'),
+                    React.createElement('button', {
                         key: 'ai-draft-btn',
                         className: 'btn btn-secondary',
                         style: { background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', color: 'white', border: 'none' },
@@ -770,6 +778,17 @@ window.Dashboard = ({ currentUser, onSignOut }) => {
                 newRecommendation: newRecommendation,
                 setNewRecommendation: setNewRecommendation,
                 updateRecommendation: updateRecommendation
+            }),
+
+            // Saved Destination Templates Modal
+            window.TemplatesModal && React.createElement(window.TemplatesModal, {
+                key: 'templates-modal',
+                isOpen: isTemplatesOpen,
+                onClose: () => setIsTemplatesOpen(false),
+                selectedTrip: selectedTrip,
+                currentRecommendation: newRecommendation,
+                currentUser: currentUser,
+                onApplyTemplate: (appliedRec) => setNewRecommendation(appliedRec)
             })
         ])
     ]);
